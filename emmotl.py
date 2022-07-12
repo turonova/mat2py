@@ -91,6 +91,25 @@ class Motl:
         motl_array = motl_array.reshape((1, motl_array.shape[0], motl_array.shape[1]))
         emfile.write(outfile_path, motl_array, overwrite=True)
 
+    @classmethod
+    def merge_and_renumber(cls, motl_list):
+        merged_df = cls.create_empty_motl()
+        feature_add = 0
+
+        for m in motl_list:
+            motl = cls.load(m)
+            feature_min = min(motl.df.loc[:, 'object_id'])
+
+            if feature_min <= feature_add:
+                motl.df.loc[:, 'object_id'] = motl.df.loc[:, 'object_id'] + (feature_add - feature_min + 1)
+
+            merged_df = pd.concat([merged_df, motl.df])
+            feature_add = max(motl.df.loc[:, 'object_id'])
+
+        merged_motl = cls(merged_df)
+        merged_motl.renumber_particles()
+        return merged_motl
+
     @staticmethod
     def batch_stopgap2em(motl_base_name, iter_no):
         for i in range(iter_no):
