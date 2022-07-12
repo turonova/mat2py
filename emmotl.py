@@ -284,3 +284,32 @@ class Motl:
                 submotl.write_to_emfile(out_name)
 
         return motls
+
+    def keep_multiple_positions(self, feature, min_no_positions, distance_threshold):
+        if isinstance(feature, int): feature = self.df.columns[feature]
+        uniq_values = self.df.loc[:, feature].unique()
+        new_motl = self.create_empty_motl()
+
+        for value in uniq_values:
+            fm = self.df.loc[self.df[feature] == value]
+
+            pos_x = fm.iloc[:, 7] + fm.iloc[:, 10]
+            pos_y = fm.iloc[:, 8] + fm.iloc[:, 11]
+            pos_z = fm.iloc[:, 9] + fm.iloc[:, 12]
+
+            for i, row in fm.iterrows():
+                position = [pos_x[i], pos_y[i], pos_z[i]]  # TODO fix to expected format
+                remaining_positions = [pos_x.drop(i), pos_y.drop(i), pos_z.drop(i)]
+                temp_dist = geometry_get_pairwise_distance(position, remaining_positions)
+
+                # sp = size((find(temp_dist<distance_threshold)),2);  # TODO again fix, based on the result format
+                sp = [x for x in temp_dist if x < distance_threshold]
+                if sp:
+                    row[15] = sp
+
+            new_motl = pd.concat([new_motl, fm])
+
+        new_motl = new_motl.loc[new_motl['geom6'] >= min_no_positions]  # TODO really should be 'geom6'?
+        self.df = new_motl
+
+
