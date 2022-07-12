@@ -245,3 +245,32 @@ class Motl:
     def renumber_particles(self):
         # new_motl(4,:)=1: size(new_motl, 2);
         self.df.loc[:, 'subtomo_id'] = list(range(1, len(self.df)+1))
+
+    def split_by_feature(self, feature, write_out=False, output_prefix=None, feature_desc_id=None):
+        # Split motl by uniq values of a selected feature
+        # Inputs:   feature - column name or index of the feature based on witch the motl will be split
+        #           write: save all the resulting Motl instances into separate files if True
+        #           output_prefix:
+        #           feature_desc_id:
+        # Output: list of Motl instances, each containing only rows with one unique value of the given feature
+
+        if isinstance(feature, int): feature = self.df.columns[feature]
+        uniq_values = self.df.loc[:, feature].unique()
+        motls = list()
+
+        for value in uniq_values:
+            submotl = self.__class__(self.df.loc[self.df[feature] == value])
+            motls.append(submotl)
+
+            if write_out:  # TODO really keep it here, or make a class method to support batch export?
+                if feature_desc_id: # TODO what's that supposed to do?
+                    out_name = output_prefix
+                    # out_name=output_prefix;
+                    # for d=feature_desc_id
+                    #     out_name=[out_name '_' num2str(nm(d,1))];
+                    # out_name=[out_name  '.em'];
+                else:
+                    out_name = f'{output_prefix}_{str(value)}.em'
+                submotl.write_to_emfile(out_name)
+
+        return motls
