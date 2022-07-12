@@ -13,7 +13,7 @@ class Motl:
     # Run clean_by_otsu and write the result to a new file
     #   `motl.clean_by_otsu(4, histogram_bin=20).write_to_emfile('path_to_output_em_file')`
     # Run class_consistency on multiple Motl instances
-    #   `motl_intersect, motl_bad,cl_overlap = Motl.class_consistency(Motl.load('emfile1', 'emfile2', 'emfile3'))`
+    #   `motl_intersect, motl_bad, cl_overlap = Motl.class_consistency(Motl.load('emfile1', 'emfile2', 'emfile3'))`
 
     def __init__(self, motl_df):
         self.df = motl_df
@@ -145,7 +145,7 @@ class Motl:
             row[12] = row[12] + rshifts
             return row
 
-        self.df.apply(shift_coords, axis=1)
+        self.df = self.df.apply(shift_coords, axis=1)
         if recenter_particles: self.update_coordinates()
 
     def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions, renumber_particles=False):
