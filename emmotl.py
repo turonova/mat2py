@@ -1,7 +1,8 @@
+import emfile
 import numpy as np
 import os
 import pandas as pd
-import emfile
+import subprocess
 
 
 class Motl:
@@ -74,11 +75,117 @@ class Motl:
         emfile.write(outfile_path, motl_array, overwrite=True)
 
     @staticmethod
-    def motl_batch_stopgap2em(motl_base_name,iteration_range):
-        # to be defined
-        pass
+    def batch_stopgap2em(motl_base_name, iter_no):
+        for i in range(iter_no):
+            motl_name = f'{motl_base_name}_{str(i)}'
+            sg_motl_stopgap_to_av3(f'{motl_name}.star', f'{motl_name}.em')
 
     @classmethod
     def motl_class_consistency(cls, motl1, motl2):
         # to be defined
         pass
+    def clean_by_otsu(self, feature, histogram_bin=None):
+        # Cleans motl by Otsu threshold (based on CC values)
+        # feature: a feature by which the subtomograms will be grouped together for cleaning;
+    	# corresponds to the rows in motl; 4 to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
+		# histogram_bin: how fine to split the histogram. Default is 30 for feature 5 and 40 for feature 4;
+		# for smaller number of subtomograms per feature the number should be lower
+
+        tomos = self.df.loc[:, 'tomo_id'].unique()
+        cleaned_motl = self.__class__.create_empty_motl()
+
+        if histogram_bin:
+            hbin = histogram_bin
+        else:
+            if feature == 5:
+                hbin = 40
+            elif feature == 6:
+                hbin = 30
+
+        for t in tomos:
+            tm = self.df.loc[self.df['tomo_id'] == t]
+            features = self.df.loc[:, feature].unique()
+
+            for f in features:
+                fm = tm.loc[tm[feature] == f]
+                h = histogram(fm.loc[:, 'score'], hbin)
+                bn = math_otsu_threshold(h.BinCounts)
+                cc_t = h.BinEdges(bn)
+                fm = fm.loc[fm['score'] >= cc_t]
+
+                cleaned_motl = pd.concat([cleaned_motl, fm])
+
+        self.df = cleaned_motl
+
+    def xyzshift(self, shift, update_positions):
+        # Apply Z-shift
+        # Shifts have the opposite sign as moving the reference in tom_shift
+
+        def shift_coords(row):
+            rshifts = tom_pointrotate(shift, row[16], row[17], row[18])
+            # rshifts = rshifts';  TODO what ' does do?
+            row[10] = row[10] + rshifts
+            row[11] = row[11] + rshifts
+            row[12] = row[12] + rshifts
+            return row
+
+        self.df.apply(shift_coords, axis=1)
+
+        if update_positions:
+            # new_shifts = m(11:13,:)-round(m(11:13,:));
+            new_shifts = self.df.iloc[:, 10:12] - self.df.iloc[10:12].apply(round, axis=1)
+            # m(8:10,:) = m(8:10,:)+round(m(11:13,:));
+            self.df.iloc[:, 7:9] = self.df.iloc[:, 7:9] + self.df.iloc[10:12].apply(round, axis=1)
+            # m(11:13,:) = new_shifts
+            self.df.iloc[:, 10:12] = new_shifts
+
+    def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions, renumber_particles=False):
+        if os.path.isfile(dimensions):
+            # TODO what is the commonly used delimeter? The matlab dlmread detected the delimeter automatically
+            # Does it have a header, index, or any other specificities?
+            tomos_dim = pd.read_csv(dimensions)
+        else:  # TODO where does the raw matrix come from?
+            tomos_dim = pd.DataFrame(dimensions)
+
+        model_path = string_path_complete(model_path)
+        tomos = self.df.loc[:, 'tomo_id'].unique()
+        cleaned_motl = self.__class__.create_empty_motl()
+
+        for t in tomos:
+            tomo_str = self.pad_with_zeros(t, 3)
+            tm = self.df.loc[self.df['tomo_id'] == t]
+
+            # tdim=tomos_dim(tomos_dim(:,1)==t,2:4);
+            tdim = tomos_dim.iloc[1:3, tomos_dim[0] == t]
+            pos = tm.iloc[:, 7:9] + tm.iloc[:, 10:12]
+
+            mod_file_name = os.path.join(model_path, tomo_str, model_suffix, '.mod')
+
+            # if(exist(mod_file_name, 'file') ~= 2)
+            if os.path.isfile(mod_file_name):
+                cleaned_motl = pd.concat([cleaned_motl, tm])
+
+            subprocess.run(['model2point', '-object', mod_file_name, f'{mod_file_name}.txt'])
+                           # stdout=out_file, stderr=out_err, check=True)
+            coord = pd.read_csv(f'{mod_file_name}.txt')  # TODO dlmread
+            # carbon_edge=geometry_spline_sampling(coord(:,3:5)',2);
+            carbon_edge = geometry_spline_sampling(coord.iloc[2:4, :], 2)
+
+            all_points = []
+            # for z=1:2:tdim(3) TODO
+                # z_points=carbon_edge';
+                # z_points(:,3)=z;
+                # all_points=[all_points; z_points];
+
+            # for p=1:size(pos,2) TODO remove from df
+                # [np npd]=dsearchn(all_points,pos(:,p)');
+                # if npd < distance_threshold:
+                #     rm_idx=[rm_idx p];
+            # tm(:,rm_idx)=[];
+
+            cleaned_motl = pd.concat([cleaned_motl, tm])
+
+        if renumber_particles:
+                # new_clean_motl(4,:)=1:size(cleaned_motl,2); TODO
+                cleaned_motl.loc[:, 'subtomo_id'] = cleaned_motl
+
