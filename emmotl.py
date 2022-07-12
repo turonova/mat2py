@@ -203,9 +203,7 @@ class Motl:
 
             cleaned_motl = pd.concat([cleaned_motl, tm])
 
-        if renumber_particles:
-                # new_clean_motl(4,:)=1:size(cleaned_motl,2); TODO
-                cleaned_motl.loc[:, 'subtomo_id'] = cleaned_motl
+        if renumber_particles: self.renumber_particles()
 
     def remove_feature(self, feature, feature_values):
        # Removes particles based on their feature (i.e. tomo number)
@@ -230,3 +228,20 @@ class Motl:
         self.df.iloc[:, 10] = shifted_x - self.df.iloc[:, 7]
         self.df.iloc[:, 11] = shifted_y - self.df.iloc[:, 8]
         self.df.iloc[:, 12] = shifted_z - self.df.iloc[:, 9]
+
+    def tomo_subset(self, tomo_numbers, renumber_particles=False):
+        # Updates motl to contain only particles from tomograms specified by tomo numbers
+        # Input: tomo_numbers - list of selected tomogram numbers to be included
+        #        renumber_particles - renumber from 1 to the size of the new motl if True
+
+        new_motl = self.__class__.create_empty_motl()
+        for i in tomo_numbers:
+            df_i = self.df.loc[self.df['tomo_id'] == i]
+            new_motl = pd.concat([new_motl, df_i])
+        self.df = new_motl
+
+        if renumber_particles: self.renumber_particles()
+
+    def renumber_particles(self):
+        # new_motl(4,:)=1: size(new_motl, 2);
+        self.df.loc[:, 'subtomo_id'] = list(range(1, len(self.df)+1))
