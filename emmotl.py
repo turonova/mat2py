@@ -134,9 +134,8 @@ class Motl:
 
         self.df = cleaned_motl
 
-    def xyzshift(self, shift, update_positions):
-        # Apply Z-shift
-        # Shifts have the opposite sign as moving the reference in tom_shift
+    def shift_positions(self, shift, recenter_particles=False):
+        # Shifts positions of all subtomgoram in the motl in the direction given by subtomos' rotations
 
         def shift_coords(row):
             rshifts = tom_pointrotate(shift, row[16], row[17], row[18])
@@ -147,15 +146,7 @@ class Motl:
             return row
 
         self.df.apply(shift_coords, axis=1)
-
-        # TODO slightly different result than update_coordinates (though the sum up is the same). Unify ?
-        if update_positions:
-            self.df.iloc[:, 7] = self.df.iloc[:, 7] + round(self.df.iloc[:, 10])
-            self.df.iloc[:, 8] = self.df.iloc[:, 8] + round(self.df.iloc[:, 11])
-            self.df.iloc[:, 9] = self.df.iloc[:, 9] + round(self.df.iloc[:, 12])
-            self.df.iloc[:, 10] = self.df.iloc[:, 10] - round(self.df.iloc[:, 10])
-            self.df.iloc[:, 11] = self.df.iloc[:, 11] - round(self.df.iloc[:, 11])
-            self.df.iloc[:, 12] = self.df.iloc[:, 12] - round(self.df.iloc[:, 12])
+        if recenter_particles: self.update_coordinates()
 
     def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions, renumber_particles=False):
         if os.path.isfile(dimensions):
