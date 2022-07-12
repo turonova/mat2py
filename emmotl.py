@@ -206,3 +206,14 @@ class Motl:
                 # new_clean_motl(4,:)=1:size(cleaned_motl,2); TODO
                 cleaned_motl.loc[:, 'subtomo_id'] = cleaned_motl
 
+    def remove_feature(self, feature, feature_values):
+       # Removes particles based on their feature (i.e. tomo number)
+       # Inputs: feature - column name or index based on which the particles will be removed (i.e. 4 for tomogram number)
+       #         feature_values - list of values to be removed
+       #         output_motl_name - name of the new motl; if empty the motl will not be written out
+       # Usage: motl.remove_feature(4, [3, 7, 8]) - removes all particles from tomograms number 3, 7, and 8
+
+        if isinstance(feature, int):
+            feature = self.df.columns[feature]
+        for value in feature_values:
+            self.df = self.df.loc[self.df[feature] != value]
