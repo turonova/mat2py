@@ -110,6 +110,20 @@ class Motl:
         merged_motl.renumber_particles()
         return merged_motl
 
+    @classmethod
+    # TODO rather change to instance method taking the second motl only as arg, as it really works only on the first motl
+    def get_particle_intersection(cls, motl1, motl2):
+        m1 = cls.load(motl1)
+        m2 = cls.load(motl2)
+        m2_values = m2.df.loc['subtomo_id'].unique()
+        motl = cls.create_empty_motl()
+
+        for value in m2_values:
+            submotl = m1.df.loc[m1.df['subtomo_id'] == value]
+            motl = pd.concat([motl, submotl])
+
+        return cls(motl)
+
     @staticmethod
     def batch_stopgap2em(motl_base_name, iter_no):
         for i in range(iter_no):
