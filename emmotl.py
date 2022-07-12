@@ -91,6 +91,35 @@ class Motl:
         motl_array = motl_array.reshape((1, motl_array.shape[0], motl_array.shape[1]))
         emfile.write(outfile_path, motl_array, overwrite=True)
 
+    def write_to_model_file(self, feature, output_base, point_size, binning=None):
+        if isinstance(feature, int): feature = self.df.columns[feature]
+        uniq_values = self.df.loc[:, feature].unique()
+        output_base = f'{output_base}_{feature}_'  # TODO now it's the name of the feature, instead of the index, is it ok?
+
+        if binning:
+            bin = binning
+        else:
+            bin = 1
+
+        for value in uniq_values:
+            fm = self.df.loc[self.df[feature] == value]
+            tomo_str = self.pad_with_zeros(value, 3)
+            output_txt = f'{output_base}{tomo_str}_model.txt'
+            output_mod = f'{output_base}{tomo_str}.mod'
+
+            pos_x = (fm.iloc[:, 7] + fm.iloc[:, 10]) * bin
+            pos_y = (fm.iloc[:, 8] + fm.iloc[:, 11]) * bin
+            pos_z = (fm.iloc[:, 9] + fm.iloc[:, 12]) * bin
+
+            # pos = [ fm(20,:)' repmat(1,size(fm,2),1) pos]; TODO
+
+            pos_df = pd.concat([pos_x, pos_y, pos_z], axis=1)
+            pos_df.to_csv(output_txt, sep='\t')
+
+            # Create model files from the coordinates
+            # system(['point2model -sc -sphere ' num2str(point_size) ' ' output_txt ' ' output_mod]);
+            subprocess.run(['point2model', '-sc', '-sphere', str(point_size), output_txt, output_mod])
+
     @classmethod
     def merge_and_renumber(cls, motl_list):
         merged_df = cls.create_empty_motl()
