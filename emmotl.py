@@ -25,6 +25,23 @@ class Motl:
                                                 'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
         return empty_motl_df
 
+    @staticmethod  # TODO move to different module
+    def pad_with_zeros(number, total_digits):
+        # Creates a string of the length specified by total_digits, containing a given number and fills the rest
+        # (at the beginning) with zeros, i.e. from the input parameters 3 and 6 it creates 000003)
+        #
+        # Input:  number - number to be padded with zero
+        #         total_digits - final length of the output string
+        # Output: string of length specified by total_digits and containing the input number at the very end
+
+        padded_str = ''  # TODO do more efficiently ?
+        zeros = total_digits - len(str(number))
+        for _ in zeros:
+            padded_str += '0'
+        padded_str += str(number)
+
+        return padded_str
+
     @classmethod
     def load(cls, *args):
         # Input: Load one or more emfiles, or already initialized instances of the Motl class
