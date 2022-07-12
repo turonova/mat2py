@@ -148,13 +148,14 @@ class Motl:
 
         self.df.apply(shift_coords, axis=1)
 
+        # TODO slightly different result than update_coordinates (though the sum up is the same). Unify ?
         if update_positions:
-            # new_shifts = m(11:13,:)-round(m(11:13,:));
-            new_shifts = self.df.iloc[:, 10:12] - self.df.iloc[10:12].apply(round, axis=1)
-            # m(8:10,:) = m(8:10,:)+round(m(11:13,:));
-            self.df.iloc[:, 7:9] = self.df.iloc[:, 7:9] + self.df.iloc[10:12].apply(round, axis=1)
-            # m(11:13,:) = new_shifts
-            self.df.iloc[:, 10:12] = new_shifts
+            self.df.iloc[:, 7] = self.df.iloc[:, 7] + round(self.df.iloc[:, 10])
+            self.df.iloc[:, 8] = self.df.iloc[:, 8] + round(self.df.iloc[:, 11])
+            self.df.iloc[:, 9] = self.df.iloc[:, 9] + round(self.df.iloc[:, 12])
+            self.df.iloc[:, 10] = self.df.iloc[:, 10] - round(self.df.iloc[:, 10])
+            self.df.iloc[:, 11] = self.df.iloc[:, 11] - round(self.df.iloc[:, 11])
+            self.df.iloc[:, 12] = self.df.iloc[:, 12] - round(self.df.iloc[:, 12])
 
     def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions, renumber_particles=False):
         if os.path.isfile(dimensions):
@@ -217,3 +218,15 @@ class Motl:
             feature = self.df.columns[feature]
         for value in feature_values:
             self.df = self.df.loc[self.df[feature] != value]
+
+    def update_coordinates(self):
+        shifted_x = self.df.iloc[:, 7] + self.df.iloc[:, 10]
+        shifted_y = self.df.iloc[:, 8] + self.df.iloc[:, 11]
+        shifted_z = self.df.iloc[:, 9] + self.df.iloc[:, 12]
+
+        self.df.iloc[:, 7] = round(shifted_x)
+        self.df.iloc[:, 8] = round(shifted_y)
+        self.df.iloc[:, 9] = round(shifted_z)
+        self.df.iloc[:, 10] = shifted_x - self.df.iloc[:, 7]
+        self.df.iloc[:, 11] = shifted_y - self.df.iloc[:, 8]
+        self.df.iloc[:, 12] = shifted_z - self.df.iloc[:, 9]
