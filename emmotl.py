@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import pandas as pd
 import emfile
 
@@ -22,6 +23,27 @@ class Motl:
                                                 'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
                                                 'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
         return empty_motl_df
+
+    @classmethod
+    def load(cls, *args):
+        # Input: Load one or more emfiles, or already initialized instances of the Motl class
+        # Output: Returns one instance, or a list of instances if multiple inputs are provided
+
+        loaded = list()
+        for motl in args:
+            if os.path.isfile(motl) and ('.em' in motl):  # TODO can emfile have any other suffix?
+                new_motl = cls.read_from_emfile(motl)
+            elif isinstance(motl, cls):
+                new_motl = motl
+            else:
+                # TODO or will it still be possible to receive the motl in form of a pure matrix?
+                raise F'Unknown input type: {motl}. Input needs to be either an emfile, or an instance of the Motl class.'
+            loaded.append(new_motl)
+
+        if len(loaded) == 1:
+            loaded = loaded[0]
+
+        return loaded
 
     @classmethod
     def read_from_emfile(cls, emfile_path):
