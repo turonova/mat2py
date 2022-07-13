@@ -20,9 +20,9 @@ class Motl:
 
     @staticmethod
     def create_empty_motl():
-        empty_motl_df = pd.DataFrame(columns = ['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
-                                                'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
-                                                'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
+        empty_motl_df = pd.DataFrame(columns=['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
+                                              'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
+                                              'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
         return empty_motl_df
 
     @staticmethod  # TODO move to different module
@@ -94,7 +94,7 @@ class Motl:
     def write_to_model_file(self, feature, output_base, point_size, binning=None):
         if isinstance(feature, int): feature = self.df.columns[feature]
         uniq_values = self.df.loc[:, feature].unique()
-        output_base = f'{output_base}_{feature}_'  # TODO now it's the name of the feature, instead of the index, is it ok?
+        output_base = f'{output_base}_{feature}_'
 
         if binning:
             bin = binning
@@ -107,9 +107,9 @@ class Motl:
             output_txt = f'{output_base}{tomo_str}_model.txt'
             output_mod = f'{output_base}{tomo_str}.mod'
 
-            pos_x = (fm.iloc[:, 7] + fm.iloc[:, 10]) * bin
-            pos_y = (fm.iloc[:, 8] + fm.iloc[:, 11]) * bin
-            pos_z = (fm.iloc[:, 9] + fm.iloc[:, 12]) * bin
+            pos_x = (fm.loc[:, 'x'] + fm.loc[:, 'shift_x']) * bin
+            pos_y = (fm.loc[:, 'y'] + fm.loc[:, 'shift_y']) * bin
+            pos_z = (fm.loc[:, 'z'] + fm.loc[:, 'shift_z']) * bin
 
             # pos = [ fm(20,:)' repmat(1,size(fm,2),1) pos]; TODO
 
@@ -159,26 +159,23 @@ class Motl:
             motl_name = f'{motl_base_name}_{str(i)}'
             sg_motl_stopgap_to_av3(f'{motl_name}.star', f'{motl_name}.em')
 
-    @classmethod
-    def motl_class_consistency(cls, motl1, motl2):
-        # to be defined
-        pass
     def clean_by_otsu(self, feature, histogram_bin=None):
         # Cleans motl by Otsu threshold (based on CC values)
         # feature: a feature by which the subtomograms will be grouped together for cleaning;
-    	# corresponds to the rows in motl; 4 to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
-		# histogram_bin: how fine to split the histogram. Default is 30 for feature 5 and 40 for feature 4;
-		# for smaller number of subtomograms per feature the number should be lower
+        # corresponds to the rows in motl; 4 to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
+        # histogram_bin: how fine to split the histogram. Default is 30 for feature 5 and 40 for feature 4;
+        # for smaller number of subtomograms per feature the number should be lower
 
+        if isinstance(feature, int): feature = self.df.columns[feature]
         tomos = self.df.loc[:, 'tomo_id'].unique()
         cleaned_motl = self.__class__.create_empty_motl()
 
         if histogram_bin:
             hbin = histogram_bin
         else:
-            if feature == 5:
+            if feature == 'tomo_id':
                 hbin = 40
-            elif feature == 6:
+            elif feature == 'object_id':
                 hbin = 30
 
         for t in tomos:
@@ -200,11 +197,11 @@ class Motl:
         # Shifts positions of all subtomgoram in the motl in the direction given by subtomos' rotations
 
         def shift_coords(row):
-            rshifts = tom_pointrotate(shift, row[16], row[17], row[18])
+            rshifts = tom_pointrotate(shift, row['phi'], row['psi'], row['theta'])
             # rshifts = rshifts';  TODO what ' does do?
-            row[10] = row[10] + rshifts
-            row[11] = row[11] + rshifts
-            row[12] = row[12] + rshifts
+            row['shift_x'] = row['shift_x'] + rshifts
+            row['shift_y'] = row['shift_y'] + rshifts
+            row['shift_z'] = row['shift_z'] + rshifts
             return row
 
         self.df = self.df.apply(shift_coords, axis=1)
@@ -226,9 +223,8 @@ class Motl:
             tomo_str = self.pad_with_zeros(t, 3)
             tm = self.df.loc[self.df['tomo_id'] == t]
 
-            # tdim=tomos_dim(tomos_dim(:,1)==t,2:4);
-            tdim = tomos_dim.iloc[1:3, tomos_dim[0] == t]
-            pos = tm.iloc[:, 7:9] + tm.iloc[:, 10:12]
+            tdim = tomos_dim.loc[tomos_dim[0] == t, ['geom1', 'geom2', 'subtomo_id']]
+            pos = tm.loc[:, ['x', 'y', 'z']] + tm.loc[:, ['shift_x', 'shift_y', 'shift_z']]
 
             mod_file_name = os.path.join(model_path, tomo_str, model_suffix, '.mod')
 
@@ -259,28 +255,27 @@ class Motl:
         if renumber_particles: self.renumber_particles()
 
     def remove_feature(self, feature, feature_values):
-       # Removes particles based on their feature (i.e. tomo number)
-       # Inputs: feature - column name or index based on which the particles will be removed (i.e. 4 for tomogram number)
-       #         feature_values - list of values to be removed
-       #         output_motl_name - name of the new motl; if empty the motl will not be written out
-       # Usage: motl.remove_feature(4, [3, 7, 8]) - removes all particles from tomograms number 3, 7, and 8
+        # Removes particles based on their feature (i.e. tomo number)
+        # Inputs: feature - col name or index based on which the particles will be removed (i.e. 4 for tomogram number)
+        #         feature_values - list of values to be removed
+        #         output_motl_name - name of the new motl; if empty the motl will not be written out
+        # Usage: motl.remove_feature(4, [3, 7, 8]) - removes all particles from tomograms number 3, 7, and 8
 
-        if isinstance(feature, int):
-            feature = self.df.columns[feature]
+        if isinstance(feature, int): feature = self.df.columns[feature]
         for value in feature_values:
             self.df = self.df.loc[self.df[feature] != value]
 
     def update_coordinates(self):
-        shifted_x = self.df.iloc[:, 7] + self.df.iloc[:, 10]
-        shifted_y = self.df.iloc[:, 8] + self.df.iloc[:, 11]
-        shifted_z = self.df.iloc[:, 9] + self.df.iloc[:, 12]
+        shifted_x = self.df.loc[:, 'x'] + self.df.loc[:, 'shift_x']
+        shifted_y = self.df.loc[:, 'y'] + self.df.loc[:, 'shift_y']
+        shifted_z = self.df.loc[:, 'z'] + self.df.loc[:, 'shift_z']
 
-        self.df.iloc[:, 7] = round(shifted_x)
-        self.df.iloc[:, 8] = round(shifted_y)
-        self.df.iloc[:, 9] = round(shifted_z)
-        self.df.iloc[:, 10] = shifted_x - self.df.iloc[:, 7]
-        self.df.iloc[:, 11] = shifted_y - self.df.iloc[:, 8]
-        self.df.iloc[:, 12] = shifted_z - self.df.iloc[:, 9]
+        self.df.loc[:, 'x'] = round(shifted_x)
+        self.df.loc[:, 'y'] = round(shifted_y)
+        self.df.loc[:, 'z'] = round(shifted_z)
+        self.df.loc[:, 'shift_x'] = shifted_x - self.df.loc[:, 'x']
+        self.df.loc[:, 'shift_y'] = shifted_y - self.df.loc[:, 'y']
+        self.df.loc[:, 'shift_z'] = shifted_z - self.df.loc[:, 'z']
 
     def tomo_subset(self, tomo_numbers, renumber_particles=False):
         # Updates motl to contain only particles from tomograms specified by tomo numbers
@@ -316,7 +311,7 @@ class Motl:
             motls.append(submotl)
 
             if write_out:  # TODO really keep it here, or make a class method to support batch export?
-                if feature_desc_id: # TODO what's that supposed to do?
+                if feature_desc_id:  # TODO what's that supposed to do?
                     out_name = output_prefix
                     # out_name=output_prefix;
                     # for d=feature_desc_id
@@ -336,9 +331,9 @@ class Motl:
         for value in uniq_values:
             fm = self.df.loc[self.df[feature] == value]
 
-            pos_x = fm.iloc[:, 7] + fm.iloc[:, 10]
-            pos_y = fm.iloc[:, 8] + fm.iloc[:, 11]
-            pos_z = fm.iloc[:, 9] + fm.iloc[:, 12]
+            pos_x = fm.loc[:, 'x'] + fm.loc[:, 'shift_x']
+            pos_y = fm.loc[:, 'y'] + fm.loc[:, 'shift_y']
+            pos_z = fm.loc[:, 'z'] + fm.loc[:, 'shift_z']
 
             for i, row in fm.iterrows():
                 position = [pos_x[i], pos_y[i], pos_z[i]]  # TODO fix to expected format
