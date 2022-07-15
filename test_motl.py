@@ -12,3 +12,9 @@ def motl():
                             'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
     motl = Motl(df)
     return motl
+
+
+
+@pytest.mark.parametrize('feature', ['score', 0])
+def test_remove_feature_existing(motl, feature):
+    assert float('0.0633') not in motl.remove_feature(feature, 0.0633).df.loc[:, 'score'].values

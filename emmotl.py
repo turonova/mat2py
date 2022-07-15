@@ -262,9 +262,17 @@ class Motl:
         # Usage: motl.remove_feature(4, [3, 7, 8]) - removes all particles from tomograms number 3, 7, and 8
 
         if isinstance(feature, int): feature = self.df.columns[feature]
-        for value in feature_values:
-            self.df = self.df.loc[self.df[feature] != value]
 
+        if not feature_values:
+            raise Exception(
+                'You must specify at least one feature value, based on witch the particles will be removed.')
+        else:
+            if not isinstance(feature_values, list):
+                feature_values = [feature_values]
+            for value in feature_values:
+                self.df = self.df.loc[self.df[feature] != value]
+
+        return self
     def update_coordinates(self):
         shifted_x = self.df.loc[:, 'x'] + self.df.loc[:, 'shift_x']
         shifted_y = self.df.loc[:, 'y'] + self.df.loc[:, 'shift_y']
