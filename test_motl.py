@@ -14,6 +14,17 @@ def motl():
     return motl
 
 
+@pytest.mark.parametrize('feature_id', ['score', 5])
+def test_get_feature_existing(motl, feature_id):
+    feature = motl.get_feature(feature_id)
+    assert isinstance(feature, str) and feature in motl.df.columns
+
+
+@pytest.mark.parametrize('feature_id', ['missing', 99])
+def test_get_feature_not_existing(motl, feature_id):
+    with pytest.raises(Exception):
+        motl.get_feature(feature_id)
+
 
 @pytest.mark.parametrize('feature', ['score', 0])
 def test_remove_feature_existing(motl, feature):
