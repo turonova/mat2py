@@ -91,8 +91,8 @@ class Motl:
         motl_array = motl_array.reshape((1, motl_array.shape[0], motl_array.shape[1]))
         emfile.write(outfile_path, motl_array, overwrite=True)
 
-    def write_to_model_file(self, feature, output_base, point_size, binning=None):
-        if isinstance(feature, int): feature = self.df.columns[feature]
+    def write_to_model_file(self, feature_id, output_base, point_size, binning=None):
+        feature = self.get_feature(feature_id)
         uniq_values = self.df.loc[:, feature].unique()
         output_base = f'{output_base}_{feature}_'
 
@@ -159,14 +159,14 @@ class Motl:
             motl_name = f'{motl_base_name}_{str(i)}'
             sg_motl_stopgap_to_av3(f'{motl_name}.star', f'{motl_name}.em')
 
-    def clean_by_otsu(self, feature, histogram_bin=None):
+    def clean_by_otsu(self, feature_id, histogram_bin=None):
         # Cleans motl by Otsu threshold (based on CC values)
-        # feature: a feature by which the subtomograms will be grouped together for cleaning;
+        # feature_id: a feature by which the subtomograms will be grouped together for cleaning;
         # corresponds to the rows in motl; 4 to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
         # histogram_bin: how fine to split the histogram. Default is 30 for feature 5 and 40 for feature 4;
         # for smaller number of subtomograms per feature the number should be lower
 
-        if isinstance(feature, int): feature = self.df.columns[feature]
+        feature = self.get_feature(feature_id)
         tomos = self.df.loc[:, 'tomo_id'].unique()
         cleaned_motl = self.__class__.create_empty_motl()
 
@@ -254,14 +254,14 @@ class Motl:
 
         if renumber_particles: self.renumber_particles()
 
-    def remove_feature(self, feature, feature_values):
+    def remove_feature(self, feature_id, feature_values):
         # Removes particles based on their feature (i.e. tomo number)
-        # Inputs: feature - col name or index based on which the particles will be removed (i.e. 4 for tomogram number)
+        # Inputs: feature_id - col name or index based on which the particles will be removed (i.e. 4 for tomogram id)
         #         feature_values - list of values to be removed
         #         output_motl_name - name of the new motl; if empty the motl will not be written out
         # Usage: motl.remove_feature(4, [3, 7, 8]) - removes all particles from tomograms number 3, 7, and 8
 
-        if isinstance(feature, int): feature = self.df.columns[feature]
+        feature = self.get_feature(feature_id)
 
         if not feature_values:
             raise Exception(
@@ -273,6 +273,23 @@ class Motl:
                 self.df = self.df.loc[self.df[feature] != value]
 
         return self
+
+    def get_feature(self, feature_id):
+        cols = self.df.columns
+        if isinstance(feature_id, int):
+            if feature_id < len(cols):
+                feature = cols[feature_id]
+            else:
+                raise Exception(
+                    f'Given feature index is out of bounds. The index must be within the range 0-{len(cols) - 1}.')
+        else:
+            if feature_id in cols:
+                feature = feature_id
+            else:
+                raise Exception('Given feature name does not correspond to any motl column.')
+
+        return feature
+
     def update_coordinates(self):
         shifted_x = self.df.loc[:, 'x'] + self.df.loc[:, 'shift_x']
         shifted_y = self.df.loc[:, 'y'] + self.df.loc[:, 'shift_y']
@@ -302,15 +319,15 @@ class Motl:
         # new_motl(4,:)=1: size(new_motl, 2);
         self.df.loc[:, 'subtomo_id'] = list(range(1, len(self.df)+1))
 
-    def split_by_feature(self, feature, write_out=False, output_prefix=None, feature_desc_id=None):
+    def split_by_feature(self, feature_id, write_out=False, output_prefix=None, feature_desc_id=None):
         # Split motl by uniq values of a selected feature
-        # Inputs:   feature - column name or index of the feature based on witch the motl will be split
+        # Inputs:   feature_id - column name or index of the feature based on witch the motl will be split
         #           write: save all the resulting Motl instances into separate files if True
         #           output_prefix:
         #           feature_desc_id:
         # Output: list of Motl instances, each containing only rows with one unique value of the given feature
 
-        if isinstance(feature, int): feature = self.df.columns[feature]
+        feature = self.get_feature(feature_id)
         uniq_values = self.df.loc[:, feature].unique()
         motls = list()
 
@@ -331,8 +348,8 @@ class Motl:
 
         return motls
 
-    def keep_multiple_positions(self, feature, min_no_positions, distance_threshold):
-        if isinstance(feature, int): feature = self.df.columns[feature]
+    def keep_multiple_positions(self, feature_id, min_no_positions, distance_threshold):
+        feature = self.get_feature(feature_id)
         uniq_values = self.df.loc[:, feature].unique()
         new_motl = self.create_empty_motl()
 
