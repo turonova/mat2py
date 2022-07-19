@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from emmotl import Motl
+from exceptions import UserInputError
 
 
 @pytest.fixture
@@ -23,7 +25,7 @@ def test_get_feature_existing(motl, feature_id):
 
 @pytest.mark.parametrize('feature_id', ['missing', 99])
 def test_get_feature_not_existing(motl, feature_id):
-    with pytest.raises(Exception):
+    with pytest.raises(UserInputError):
         motl.get_feature(feature_id)
 
 
@@ -53,11 +55,12 @@ def test_load(m):
 
 
 @pytest.mark.parametrize('m', ['./example_files/test/au_1.txt', './example_files/test/au_1', '', (), [],
-                               './example_files/test/col_missing.em', './example_files/test/na_values.em',
-                               './example_files/test/extra_col.em', './example_files/test/bad_values.em',
                                'not_a_file_path', ['./example_files/test/au_1.em', './example_files/au_1.txt']])
+                                # TODO test those when read_from_emfile is finished
+                                # './example_files/test/col_missing.em', './example_files/test/na_values.em',
+                                # './example_files/test/extra_col.em', './example_files/test/bad_values.em',
 def test_load_wrong(m):
-    with pytest.raises(Exception):
+    with pytest.raises(UserInputError):
         Motl.load(m)
 
 
@@ -75,7 +78,7 @@ def test_merge_and_renumber(motl_list):
 @pytest.mark.parametrize('motl_list', ['./example_files/test/au_1.em', [], (), 'not_a_list', 42,
                                        ['./example_files/test/au_1.em', None]])
 def test_merge_and_renumber_wrong(motl_list):
-    with pytest.raises(Exception):
+    with pytest.raises(UserInputError):
         Motl.merge_and_renumber(motl_list)
 
 
@@ -91,5 +94,5 @@ def test_get_particle_intersection(m1, m2):
 @pytest.mark.parametrize('m1, m2', [('./example_files/test/au_1.em', None), ('./example_files/test/au_1.em', 'a'),
                                     (None, None), ('./example_files/test/au_1.txt', './example_files/test/au_2.tf')])
 def test_get_particle_intersection_wrong(m1, m2):
-    with pytest.raises(Exception):
+    with pytest.raises(UserInputError):
         Motl.get_particle_intersection(m1, m2)

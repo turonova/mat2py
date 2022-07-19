@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import subprocess
 
+from exceptions import UserInputError
+
 
 class Motl:
     # Motl module example usage
@@ -52,7 +54,7 @@ class Motl:
         loaded = list()
         motls = [input_motl] if not isinstance(input_motl, list) else input_motl
         if len(motls) == 0:
-            raise Exception('At least one em file, or a Motl instance must be provided.')
+            raise UserInputError('At least one em file or a Motl instance must be provided.')
         else:
             for motl in motls:
                 # TODO can emfile have any other suffix?
@@ -63,11 +65,11 @@ class Motl:
                     new_motl = motl
                 else:
                     # TODO or will it still be possible to receive the motl in form of a pure matrix?
-                    raise Exception(f'Unknown input type: {motl}. '
+                    raise UserInputError(f'Unknown input type: {motl}. '
                           f'Input needs to be either an em file (.em), or an instance of the Motl class.')
 
                 if not np.array_equal(new_motl.df.columns, cls.create_empty_motl().columns):
-                    raise Exception(f'Provided Motl object {motl} seems to be corrupted and can not be loaded.')
+                    raise UserInputError(f'Provided Motl object {motl} seems to be corrupted and can not be loaded.')
                 else:
                     loaded.append(new_motl)
 
@@ -143,8 +145,8 @@ class Motl:
         feature_add = 0
 
         if not isinstance(motl_list, list) or len(motl_list) == 0:
-            raise Exception(f'You must provide a list of em file paths, or Motl instances. '
-                            f'Instead, an instance of {type(motl_list).__name__} was given.')
+            raise UserInputError(f'You must provide a list of em file paths, or Motl instances. '
+                                 f'Instead, an instance of {type(motl_list).__name__} was given.')
 
         for m in motl_list:
             motl = cls.load(m)
@@ -284,7 +286,7 @@ class Motl:
         feature = self.get_feature(feature_id)
 
         if not feature_values:
-            raise Exception(
+            raise UserInputError(
                 'You must specify at least one feature value, based on witch the particles will be removed.')
         else:
             if not isinstance(feature_values, list):
@@ -300,13 +302,13 @@ class Motl:
             if feature_id < len(cols):
                 feature = cols[feature_id]
             else:
-                raise Exception(
+                raise UserInputError(
                     f'Given feature index is out of bounds. The index must be within the range 0-{len(cols) - 1}.')
         else:
             if feature_id in cols:
                 feature = feature_id
             else:
-                raise Exception('Given feature name does not correspond to any motl column.')
+                raise UserInputError('Given feature name does not correspond to any motl column.')
 
         return feature
 
