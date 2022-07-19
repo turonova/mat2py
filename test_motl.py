@@ -77,3 +77,19 @@ def test_merge_and_renumber(motl_list):
 def test_merge_and_renumber_wrong(motl_list):
     with pytest.raises(Exception):
         Motl.merge_and_renumber(motl_list)
+
+
+@pytest.mark.parametrize('m1, m2', [('./example_files/test/au_1.em', './example_files/test/au_2.em'),
+                                    ('./example_files/test/au_1.em', './example_files/test/au_1.em')])
+def test_get_particle_intersection(m1, m2):
+    intersected = Motl.get_particle_intersection(m1, m2)
+    m1_values = Motl.load(m1).df.loc[:, 'subtomo_id'].values
+    m2_values = Motl.load(m2).df.loc[:, 'subtomo_id'].values
+    assert all((value in m1_values) and (value in m2_values) for value in intersected.df.loc[:, 'subtomo_id'].values)
+
+
+@pytest.mark.parametrize('m1, m2', [('./example_files/test/au_1.em', None), ('./example_files/test/au_1.em', 'a'),
+                                    (None, None), ('./example_files/test/au_1.txt', './example_files/test/au_2.tf')])
+def test_get_particle_intersection_wrong(m1, m2):
+    with pytest.raises(Exception):
+        Motl.get_particle_intersection(m1, m2)

@@ -161,18 +161,17 @@ class Motl:
         return merged_motl
 
     @classmethod
-    # TODO rather change to instance method taking the second motl only as arg, as it really works only on the first motl
     def get_particle_intersection(cls, motl1, motl2):
-        m1 = cls.load(motl1)
-        m2 = cls.load(motl2)
-        m2_values = m2.df.loc['subtomo_id'].unique()
-        motl = cls.create_empty_motl()
+        # TODO currently keeps rwos from motl1, is that ok? (are the reamining values of the row identical to motl2?)
+        m1, m2 = cls.load([motl1, motl2])
+        m2_values = m2.df.loc[:, 'subtomo_id'].values
+        intersected = cls.create_empty_motl()
 
         for value in m2_values:
             submotl = m1.df.loc[m1.df['subtomo_id'] == value]
-            motl = pd.concat([motl, submotl])
+            intersected = pd.concat([intersected, submotl])
 
-        return cls(motl)
+        return cls(intersected)
 
     @staticmethod
     def batch_stopgap2em(motl_base_name, iter_no):
