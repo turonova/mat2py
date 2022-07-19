@@ -17,8 +17,9 @@ class Motl:
     # Run class_consistency on multiple Motl instances
     #   `motl_intersect, motl_bad, cl_overlap = Motl.class_consistency(Motl.load('emfile1', 'emfile2', 'emfile3'))`
 
-    def __init__(self, motl_df):
+    def __init__(self, motl_df, header=None):
         self.df = motl_df
+        self.header = header if header else {}
 
     @staticmethod
     def create_empty_motl():
@@ -80,30 +81,27 @@ class Motl:
 
     @classmethod
     def read_from_emfile(cls, emfile_path):
-        # TODO read in the EM file to get the data (currently working with a decoded file, already transposed)
-        motl = pd.read_csv(emfile_path, dtype=float, header=None,  # TODO needs to have 4 decimal points?
-                           names=['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
-                                  'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
-                                  'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
+        header, parsed_emfile = emfile.read(emfile_path)
+        if not len(parsed_emfile[0][0]) == 20:
+            raise UserInputError(
+                f'Provided file contains {len(parsed_emfile[0][0])} columns, while 20 columns are expected.')
 
-        # tomo_number, object_number, coordinates, angles = emfile_path
-        # number_of_particles = coordinates.shape[0]
-        #
+        # TODO do we really want everything as float? (taken from the original parsed file)
+        motl = pd.DataFrame(data=parsed_emfile[0], dtype=float,
+                            columns=['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
+                                     'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
+                                     'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
+
+        # TODO do we want to keep these? (from the original emmotl.py)
         # motl['subtomo_id'] = np.arange(1, number_of_particles + 1, 1)
-        # motl['tomo_id'] = tomo_number
-        # motl['object_id'] = object_number
         # motl['class'] = 1
-        #
-        # # round coord
+        # round coord
         # motl[['x', 'y', 'z']] = np.round(coordinates.values)
-        #
-        # # get shifts
+        # get shifts
         # motl[['shift_x', 'shift_y', 'shift_z']] = coordinates.values - np.round(coordinates.values)
-        #
-        # # assign angles
-        # motl[['phi', 'psi', 'theta']] = angles.values
 
-        return cls(motl)
+        return cls(motl, header)
+
 
     def write_to_emfile(self, outfile_path):
         motl_array = self.df.values
@@ -396,5 +394,3 @@ class Motl:
 
         new_motl = new_motl.loc[new_motl['geom6'] >= min_no_positions]  # TODO really should be 'geom6'?
         self.df = new_motl
-
-
