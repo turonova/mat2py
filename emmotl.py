@@ -102,11 +102,11 @@ class Motl:
 
         return cls(motl, header)
 
-
     def write_to_emfile(self, outfile_path):
-        motl_array = self.df.values
+        motl_array = self.df.to_numpy()
         motl_array = motl_array.reshape((1, motl_array.shape[0], motl_array.shape[1]))
-        emfile.write(outfile_path, motl_array, overwrite=True)
+        # FIXME fails on writing back the header
+        emfile.write(outfile_path, motl_array, self.header, overwrite=True)
 
     def write_to_model_file(self, feature_id, output_base, point_size, binning=None):
         feature = self.get_feature(feature_id)
