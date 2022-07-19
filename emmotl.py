@@ -43,46 +43,63 @@ class Motl:
         return padded_str
 
     @classmethod
-    def load(cls, *args):
-        # Input: Load one or more emfiles, or already initialized instances of the Motl class
+    def load(cls, input_motl):
+        # TODO allow to load correct motl/s if there are one or more corrupted?
+        # Input: Load one or more emfiles (as a list), or already initialized instances of the Motl class
+        #        E.g. `Motl.load([cryo1.em, cryo2.em, motl_instance1])`
         # Output: Returns one instance, or a list of instances if multiple inputs are provided
 
         loaded = list()
-        for motl in args:
-            if os.path.isfile(motl) and ('.em' in motl):  # TODO can emfile have any other suffix?
-                new_motl = cls.read_from_emfile(motl)
-            elif isinstance(motl, cls):
-                new_motl = motl
-            else:
-                # TODO or will it still be possible to receive the motl in form of a pure matrix?
-                raise F'Unknown input type: {motl}. Input needs to be either an emfile, or an instance of the Motl class.'
-            loaded.append(new_motl)
+        motls = [input_motl] if not isinstance(input_motl, list) else input_motl
+        if len(motls) == 0:
+            raise Exception('At least one em file, or a Motl instance must be provided.')
+        else:
+            for motl in motls:
+                # TODO can emfile have any other suffix?
+                if isinstance(motl, str) and os.path.isfile(motl) and (os.path.splitext(motl)[-1] == '.em'):
+                    new_motl = cls.read_from_emfile(motl)
 
-        if len(loaded) == 1:
-            loaded = loaded[0]
+                elif isinstance(motl, cls):
+                    new_motl = motl
+                else:
+                    # TODO or will it still be possible to receive the motl in form of a pure matrix?
+                    raise Exception(f'Unknown input type: {motl}. '
+                          f'Input needs to be either an em file (.em), or an instance of the Motl class.')
+
+                if not np.array_equal(new_motl.df.columns, cls.create_empty_motl().columns):
+                    raise Exception(f'Provided Motl object {motl} seems to be corrupted and can not be loaded.')
+                else:
+                    loaded.append(new_motl)
+
+            if len(loaded) == 1:
+                loaded = loaded[0]
 
         return loaded
 
     @classmethod
     def read_from_emfile(cls, emfile_path):
-        # TODO read in the EM file to get the data
-        tomo_number, object_number, coordinates, angles = emfile_path
-        number_of_particles = coordinates.shape[0]
+        # TODO read in the EM file to get the data (currently working with a decoded file, already transposed)
+        motl = pd.read_csv(emfile_path, dtype=float, header=None,  # TODO needs to have 4 decimal points?
+                           names=['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
+                                  'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
+                                  'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
 
-        motl = cls.create_empty_motl()
-        motl['subtomo_id'] = np.arange(1, number_of_particles + 1, 1)
-        motl['tomo_id'] = tomo_number
-        motl['object_id'] = object_number
-        motl['class'] = 1
-
-        # round coord
-        motl[['x', 'y', 'z']] = np.round(coordinates.values)
-
-        # get shifts
-        motl[['shift_x', 'shift_y', 'shift_z']] = coordinates.values - np.round(coordinates.values)
-
-        # assign angles
-        motl[['phi', 'psi', 'theta']] = angles.values
+        # tomo_number, object_number, coordinates, angles = emfile_path
+        # number_of_particles = coordinates.shape[0]
+        #
+        # motl['subtomo_id'] = np.arange(1, number_of_particles + 1, 1)
+        # motl['tomo_id'] = tomo_number
+        # motl['object_id'] = object_number
+        # motl['class'] = 1
+        #
+        # # round coord
+        # motl[['x', 'y', 'z']] = np.round(coordinates.values)
+        #
+        # # get shifts
+        # motl[['shift_x', 'shift_y', 'shift_z']] = coordinates.values - np.round(coordinates.values)
+        #
+        # # assign angles
+        # motl[['phi', 'psi', 'theta']] = angles.values
 
         return cls(motl)
 
