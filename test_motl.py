@@ -32,12 +32,27 @@ def test_get_feature_not_existing(motl, feature_id):
 @pytest.mark.parametrize('feature', ['score', 0])
 def test_remove_feature_existing(motl, feature):
     assert float('0.0633') not in motl.remove_feature(feature, 0.0633).df.loc[:, 'score'].values
+@pytest.mark.parametrize('m', ['./example_files/test/au_1.em', './example_files/test/au_2.em'])
+def test_read_from_emfile(m):
+    # TODO check other critical aspects of the motl ?
+    motl = Motl.read_from_emfile(m)
+    assert isinstance(motl.header, dict)
+    assert np.array_equal(motl.df.columns, ['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
+                                            'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z',
+                                            'geom4', 'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
+    assert all(dt == 'float64' for dt in motl.df.dtypes.values)
+
+
+@pytest.mark.parametrize('m', ['./example_files/test/col_missing.em', './example_files/test/extra_col.em'])
+# TODO did not manage to write out corrupted em file '/test/na_values.em', '/test/bad_values.em'
+def test_read_from_emfile_wrong(m):
+    with pytest.raises(UserInputError):
+        Motl.read_from_emfile(m)
 
 
 @pytest.mark.parametrize('m', ['./example_files/test/au_1.em',
                                ['./example_files/test/au_1.em', './example_files/test/au_2.em']])
 def test_load(m):
-    # TODO check other critical aspects of the motl ?
     # TODO test Motl instance given (does not work within parametrize)
     loaded = Motl.load(m)
     if isinstance(m, list):
@@ -56,9 +71,6 @@ def test_load(m):
 
 @pytest.mark.parametrize('m', ['./example_files/test/au_1.txt', './example_files/test/au_1', '', (), [],
                                'not_a_file_path', ['./example_files/test/au_1.em', './example_files/au_1.txt']])
-                                # TODO test those when read_from_emfile is finished
-                                # './example_files/test/col_missing.em', './example_files/test/na_values.em',
-                                # './example_files/test/extra_col.em', './example_files/test/bad_values.em',
 def test_load_wrong(m):
     with pytest.raises(UserInputError):
         Motl.load(m)
