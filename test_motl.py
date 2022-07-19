@@ -8,12 +8,7 @@ from exceptions import UserInputError
 
 @pytest.fixture
 def motl():
-    df = pd.read_csv('./example_files/au_1.csv',
-                     dtype=float, header=None,
-                     names=['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
-                            'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
-                            'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
-    motl = Motl(df)
+    motl = Motl.read_from_emfile('./example_files/au_1.em')
     return motl
 
 
@@ -31,7 +26,9 @@ def test_get_feature_not_existing(motl, feature_id):
 
 @pytest.mark.parametrize('feature', ['score', 0])
 def test_remove_feature_existing(motl, feature):
-    assert float('0.0633') not in motl.remove_feature(feature, 0.0633).df.loc[:, 'score'].values
+    assert float('0.063319') not in motl.remove_feature(feature, 0.063319).df.loc[:, 'score'].values
+
+
 @pytest.mark.parametrize('m', ['./example_files/test/au_1.em', './example_files/test/au_2.em'])
 def test_read_from_emfile(m):
     # TODO check other critical aspects of the motl ?
