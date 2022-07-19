@@ -142,6 +142,10 @@ class Motl:
         merged_df = cls.create_empty_motl()
         feature_add = 0
 
+        if not isinstance(motl_list, list) or len(motl_list) == 0:
+            raise Exception(f'You must provide a list of em file paths, or Motl instances. '
+                            f'Instead, an instance of {type(motl_list).__name__} was given.')
+
         for m in motl_list:
             motl = cls.load(m)
             feature_min = min(motl.df.loc[:, 'object_id'])

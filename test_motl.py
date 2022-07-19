@@ -59,3 +59,21 @@ def test_load(m):
 def test_load_wrong(m):
     with pytest.raises(Exception):
         Motl.load(m)
+
+
+@pytest.mark.parametrize('motl_list', [['./example_files/test/au_1.em', './example_files/test/au_2.em'],
+                                       ['./example_files/test/au_1.em', './example_files/test/au_1.em']])
+def test_merge_and_renumber(motl_list):
+    # TODO how should we check the 'object_id' is numbered correctly ?
+    combined_len = 0
+    for m in motl_list:
+        combined_len += len(Motl.load(m).df)
+    merged_motl = Motl.merge_and_renumber(motl_list)
+    assert len(merged_motl.df) == combined_len
+
+
+@pytest.mark.parametrize('motl_list', ['./example_files/test/au_1.em', [], (), 'not_a_list', 42,
+                                       ['./example_files/test/au_1.em', None]])
+def test_merge_and_renumber_wrong(motl_list):
+    with pytest.raises(Exception):
+        Motl.merge_and_renumber(motl_list)
