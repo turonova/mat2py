@@ -45,39 +45,21 @@ class Motl:
 
         return padded_str
 
-    @classmethod
-    def load(cls, input_motl):
-        # TODO allow to load correct motl/s if there are one or more corrupted?
-        # Input: Load one or more emfiles (as a list), or already initialized instances of the Motl class
-        #        E.g. `Motl.load([cryo1.em, cryo2.em, motl_instance1])`
-        # Output: Returns one instance, or a list of instances if multiple inputs are provided
-
-        loaded = list()
-        motls = [input_motl] if not isinstance(input_motl, list) else input_motl
-        if len(motls) == 0:
-            raise UserInputError('At least one em file or a Motl instance must be provided.')
+    @staticmethod
+    def get_feature(cols, feature_id):
+        if isinstance(feature_id, int):
+            if feature_id < len(cols):
+                feature = cols[feature_id]
+            else:
+                raise UserInputError(
+                    f'Given feature index is out of bounds. The index must be within the range 0-{len(cols) - 1}.')
         else:
-            for motl in motls:
-                # TODO can emfile have any other suffix?
-                if isinstance(motl, str) and os.path.isfile(motl) and (os.path.splitext(motl)[-1] == '.em'):
-                    new_motl = cls.read_from_emfile(motl)
+            if feature_id in cols:
+                feature = feature_id
+            else:
+                raise UserInputError('Given feature name does not correspond to any motl column.')
 
-                elif isinstance(motl, cls):
-                    new_motl = motl
-                else:
-                    # TODO or will it still be possible to receive the motl in form of a pure matrix?
-                    raise UserInputError(f'Unknown input type: {motl}. '
-                          f'Input needs to be either an em file (.em), or an instance of the Motl class.')
-
-                if not np.array_equal(new_motl.df.columns, cls.create_empty_motl().columns):
-                    raise UserInputError(f'Provided Motl object {motl} seems to be corrupted and can not be loaded.')
-                else:
-                    loaded.append(new_motl)
-
-            if len(loaded) == 1:
-                loaded = loaded[0]
-
-        return loaded
+        return feature
 
     @classmethod
     def read_from_emfile(cls, emfile_path):
@@ -102,14 +84,140 @@ class Motl:
 
         return cls(motl, header)
 
+    @classmethod
+    def load(cls, input_motl):
+        # TODO allow to load correct motl/s if there are one or more corrupted?
+        # Input: Load one or more emfiles (as a list), or already initialized instances of the Motl class
+        #        E.g. `Motl.load([cryo1.em, cryo2.em, motl_instance1])`
+        # Output: Returns one instance, or a list of instances if multiple inputs are provided
+
+        loaded = list()
+        motls = [input_motl] if not isinstance(input_motl, list) else input_motl
+        if len(motls) == 0:
+            raise UserInputError('At least one em file or a Motl instance must be provided.')
+        else:
+            for motl in motls:
+                # TODO can emfile have any other suffix?
+                if isinstance(motl, str) and os.path.isfile(motl) and (os.path.splitext(motl)[-1] == '.em'):
+                    new_motl = cls.read_from_emfile(motl)
+
+                elif isinstance(motl, cls):
+                    new_motl = motl
+                else:
+                    # TODO or will it still be possible to receive the motl in form of a pure matrix?
+                    raise UserInputError(f'Unknown input type: {motl}. '
+                                         f'Input needs to be either an em file (.em), or an instance of the Motl class.')
+
+                if not np.array_equal(new_motl.df.columns, cls.create_empty_motl().columns):
+                    raise UserInputError(f'Provided Motl object {motl} seems to be corrupted and can not be loaded.')
+                else:
+                    loaded.append(new_motl)
+
+            if len(loaded) == 1:
+                loaded = loaded[0]
+
+        return loaded
+
+    @classmethod
+    def merge_and_renumber(cls, motl_list):
+        merged_df = cls.create_empty_motl()
+        feature_add = 0
+
+        if not isinstance(motl_list, list) or len(motl_list) == 0:
+            raise UserInputError(f'You must provide a list of em file paths, or Motl instances. '
+                                 f'Instead, an instance of {type(motl_list).__name__} was given.')
+
+        for m in motl_list:
+            motl = cls.load(m)
+            feature_min = min(motl.df.loc[:, 'object_id'])
+
+            if feature_min <= feature_add:
+                motl.df.loc[:, 'object_id'] = motl.df.loc[:, 'object_id'] + (feature_add - feature_min + 1)
+
+            merged_df = pd.concat([merged_df, motl.df])
+            feature_add = max(motl.df.loc[:, 'object_id'])
+
+        merged_motl = cls(merged_df)
+        merged_motl.renumber_particles()
+        return merged_motl
+
+    @classmethod
+    def get_particle_intersection(cls, motl1, motl2):
+        # TODO currently keeps rows from motl1, is that ok? (are the remaining values of the row identical to motl2?)
+        m1, m2 = cls.load([motl1, motl2])
+        m2_values = m2.df.loc[:, 'subtomo_id'].values
+        intersected = cls.create_empty_motl()
+
+        for value in m2_values:
+            submotl = m1.df.loc[m1.df['subtomo_id'] == value]
+            intersected = pd.concat([intersected, submotl])
+
+        return cls(intersected)
+
     def write_to_emfile(self, outfile_path):
         motl_array = self.df.to_numpy()
         motl_array = motl_array.reshape((1, motl_array.shape[0], motl_array.shape[1]))
         # FIXME fails on writing back the header
         emfile.write(outfile_path, motl_array, self.header, overwrite=True)
 
+    def remove_feature(self, feature_id, feature_values):
+        # Removes particles based on their feature (i.e. tomo number)
+        # Inputs: feature_id - col name or index based on which the particles will be removed (i.e. 4 for tomogram id)
+        #         feature_values - list of values to be removed
+        #         output_motl_name - name of the new motl; if empty the motl will not be written out
+        # Usage: motl.remove_feature(4, [3, 7, 8]) - removes all particles from tomograms number 3, 7, and 8
+
+        feature = self.get_feature(self.df.columns, feature_id)
+
+        if not feature_values:
+            raise UserInputError(
+                'You must specify at least one feature value, based on witch the particles will be removed.')
+        else:
+            if not isinstance(feature_values, list):
+                feature_values = [feature_values]
+            for value in feature_values:
+                self.df = self.df.loc[self.df[feature] != value]
+
+        return self
+
+    def update_coordinates(self):  # TODO add tests
+        shifted_x = self.df.loc[:, 'x'] + self.df.loc[:, 'shift_x']
+        shifted_y = self.df.loc[:, 'y'] + self.df.loc[:, 'shift_y']
+        shifted_z = self.df.loc[:, 'z'] + self.df.loc[:, 'shift_z']
+
+        self.df.loc[:, 'x'] = round(shifted_x)
+        self.df.loc[:, 'y'] = round(shifted_y)
+        self.df.loc[:, 'z'] = round(shifted_z)
+        self.df.loc[:, 'shift_x'] = shifted_x - self.df.loc[:, 'x']
+        self.df.loc[:, 'shift_y'] = shifted_y - self.df.loc[:, 'y']
+        self.df.loc[:, 'shift_z'] = shifted_z - self.df.loc[:, 'z']
+
+        return self
+
+    def tomo_subset(self, tomo_numbers, renumber_particles=False):  # TODO add tests
+        # Updates motl to contain only particles from tomograms specified by tomo numbers
+        # Input: tomo_numbers - list of selected tomogram numbers to be included
+        #        renumber_particles - renumber from 1 to the size of the new motl if True
+
+        new_motl = self.__class__.create_empty_motl()
+        for i in tomo_numbers:
+            df_i = self.df.loc[self.df['tomo_id'] == i]
+            new_motl = pd.concat([new_motl, df_i])
+        self.df = new_motl
+
+        if renumber_particles: self.renumber_particles()
+        return self
+
+    def renumber_particles(self):  # TODO add tests
+        # new_motl(4,:)=1: size(new_motl, 2);
+        self.df.loc[:, 'subtomo_id'] = list(range(1, len(self.df)+1))
+        return self
+
+    ############################
+    # PARTIALLY FINISHED METHODS
+
     def write_to_model_file(self, feature_id, output_base, point_size, binning=None):
-        feature = self.get_feature(feature_id)
+        feature = self.get_feature(self.df.columns, feature_id)
         uniq_values = self.df.loc[:, feature].unique()
         output_base = f'{output_base}_{feature}_'
 
@@ -137,42 +245,6 @@ class Motl:
             # system(['point2model -sc -sphere ' num2str(point_size) ' ' output_txt ' ' output_mod]);
             subprocess.run(['point2model', '-sc', '-sphere', str(point_size), output_txt, output_mod])
 
-    @classmethod
-    def merge_and_renumber(cls, motl_list):
-        merged_df = cls.create_empty_motl()
-        feature_add = 0
-
-        if not isinstance(motl_list, list) or len(motl_list) == 0:
-            raise UserInputError(f'You must provide a list of em file paths, or Motl instances. '
-                                 f'Instead, an instance of {type(motl_list).__name__} was given.')
-
-        for m in motl_list:
-            motl = cls.load(m)
-            feature_min = min(motl.df.loc[:, 'object_id'])
-
-            if feature_min <= feature_add:
-                motl.df.loc[:, 'object_id'] = motl.df.loc[:, 'object_id'] + (feature_add - feature_min + 1)
-
-            merged_df = pd.concat([merged_df, motl.df])
-            feature_add = max(motl.df.loc[:, 'object_id'])
-
-        merged_motl = cls(merged_df)
-        merged_motl.renumber_particles()
-        return merged_motl
-
-    @classmethod
-    def get_particle_intersection(cls, motl1, motl2):
-        # TODO currently keeps rwos from motl1, is that ok? (are the reamining values of the row identical to motl2?)
-        m1, m2 = cls.load([motl1, motl2])
-        m2_values = m2.df.loc[:, 'subtomo_id'].values
-        intersected = cls.create_empty_motl()
-
-        for value in m2_values:
-            submotl = m1.df.loc[m1.df['subtomo_id'] == value]
-            intersected = pd.concat([intersected, submotl])
-
-        return cls(intersected)
-
     @staticmethod
     def batch_stopgap2em(motl_base_name, iter_no):
         for i in range(iter_no):
@@ -182,11 +254,11 @@ class Motl:
     def clean_by_otsu(self, feature_id, histogram_bin=None):
         # Cleans motl by Otsu threshold (based on CC values)
         # feature_id: a feature by which the subtomograms will be grouped together for cleaning;
-        # corresponds to the rows in motl; 4 to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
+        #             4 or 'tomo_id' to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
         # histogram_bin: how fine to split the histogram. Default is 30 for feature 5 and 40 for feature 4;
-        # for smaller number of subtomograms per feature the number should be lower
+        #             for smaller number of subtomograms per feature the number should be lower
 
-        feature = self.get_feature(feature_id)
+        feature = self.get_feature(self.df.columns, feature_id)
         tomos = self.df.loc[:, 'tomo_id'].unique()
         cleaned_motl = self.__class__.create_empty_motl()
 
@@ -197,6 +269,9 @@ class Motl:
                 hbin = 40
             elif feature == 'object_id':
                 hbin = 30
+            else:
+                raise UserInputError(f'The selected feature ({feature}) does not correspond either to tomo_id, nor to'
+                                     f'object_id. You need to specify the histogram_bin.')
 
         for t in tomos:
             tm = self.df.loc[self.df['tomo_id'] == t]
@@ -212,6 +287,7 @@ class Motl:
                 cleaned_motl = pd.concat([cleaned_motl, fm])
 
         self.df = cleaned_motl
+        return self
 
     def shift_positions(self, shift, recenter_particles=False):
         # Shifts positions of all subtomgoram in the motl in the direction given by subtomos' rotations
@@ -226,6 +302,7 @@ class Motl:
 
         self.df = self.df.apply(shift_coords, axis=1)
         if recenter_particles: self.update_coordinates()
+        return self
 
     def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions, renumber_particles=False):
         if os.path.isfile(dimensions):
@@ -274,70 +351,7 @@ class Motl:
 
         if renumber_particles: self.renumber_particles()
 
-    def remove_feature(self, feature_id, feature_values):
-        # Removes particles based on their feature (i.e. tomo number)
-        # Inputs: feature_id - col name or index based on which the particles will be removed (i.e. 4 for tomogram id)
-        #         feature_values - list of values to be removed
-        #         output_motl_name - name of the new motl; if empty the motl will not be written out
-        # Usage: motl.remove_feature(4, [3, 7, 8]) - removes all particles from tomograms number 3, 7, and 8
-
-        feature = self.get_feature(feature_id)
-
-        if not feature_values:
-            raise UserInputError(
-                'You must specify at least one feature value, based on witch the particles will be removed.')
-        else:
-            if not isinstance(feature_values, list):
-                feature_values = [feature_values]
-            for value in feature_values:
-                self.df = self.df.loc[self.df[feature] != value]
-
         return self
-
-    def get_feature(self, feature_id):
-        cols = self.df.columns
-        if isinstance(feature_id, int):
-            if feature_id < len(cols):
-                feature = cols[feature_id]
-            else:
-                raise UserInputError(
-                    f'Given feature index is out of bounds. The index must be within the range 0-{len(cols) - 1}.')
-        else:
-            if feature_id in cols:
-                feature = feature_id
-            else:
-                raise UserInputError('Given feature name does not correspond to any motl column.')
-
-        return feature
-
-    def update_coordinates(self):
-        shifted_x = self.df.loc[:, 'x'] + self.df.loc[:, 'shift_x']
-        shifted_y = self.df.loc[:, 'y'] + self.df.loc[:, 'shift_y']
-        shifted_z = self.df.loc[:, 'z'] + self.df.loc[:, 'shift_z']
-
-        self.df.loc[:, 'x'] = round(shifted_x)
-        self.df.loc[:, 'y'] = round(shifted_y)
-        self.df.loc[:, 'z'] = round(shifted_z)
-        self.df.loc[:, 'shift_x'] = shifted_x - self.df.loc[:, 'x']
-        self.df.loc[:, 'shift_y'] = shifted_y - self.df.loc[:, 'y']
-        self.df.loc[:, 'shift_z'] = shifted_z - self.df.loc[:, 'z']
-
-    def tomo_subset(self, tomo_numbers, renumber_particles=False):
-        # Updates motl to contain only particles from tomograms specified by tomo numbers
-        # Input: tomo_numbers - list of selected tomogram numbers to be included
-        #        renumber_particles - renumber from 1 to the size of the new motl if True
-
-        new_motl = self.__class__.create_empty_motl()
-        for i in tomo_numbers:
-            df_i = self.df.loc[self.df['tomo_id'] == i]
-            new_motl = pd.concat([new_motl, df_i])
-        self.df = new_motl
-
-        if renumber_particles: self.renumber_particles()
-
-    def renumber_particles(self):
-        # new_motl(4,:)=1: size(new_motl, 2);
-        self.df.loc[:, 'subtomo_id'] = list(range(1, len(self.df)+1))
 
     def split_by_feature(self, feature_id, write_out=False, output_prefix=None, feature_desc_id=None):
         # Split motl by uniq values of a selected feature
@@ -347,7 +361,7 @@ class Motl:
         #           feature_desc_id:
         # Output: list of Motl instances, each containing only rows with one unique value of the given feature
 
-        feature = self.get_feature(feature_id)
+        feature = self.get_feature(self.df.columns, feature_id)
         uniq_values = self.df.loc[:, feature].unique()
         motls = list()
 
@@ -369,7 +383,7 @@ class Motl:
         return motls
 
     def keep_multiple_positions(self, feature_id, min_no_positions, distance_threshold):
-        feature = self.get_feature(feature_id)
+        feature = self.get_feature(self.df.columns, feature_id)
         uniq_values = self.df.loc[:, feature].unique()
         new_motl = self.create_empty_motl()
 
@@ -394,3 +408,4 @@ class Motl:
 
         new_motl = new_motl.loc[new_motl['geom6'] >= min_no_positions]  # TODO really should be 'geom6'?
         self.df = new_motl
+        return self
