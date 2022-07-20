@@ -430,3 +430,80 @@ class Motl:
         new_motl = new_motl.loc[new_motl['geom6'] >= min_no_positions]  # TODO really should be 'geom6'?
         self.df = new_motl
         return self
+
+    @classmethod
+    def recenter_subparticle(cls, motl_list, mask_list, size_list, rotations=None):
+        # motl_list = ['SU_motl_gp210_bin4_1.em','SU_motl_gp210_bin4_1.em']
+        # mask_list = ['temp_mask.em','temp2_mask.em']
+        # size_list = [36 36]
+        # rotations = [[0 0 0], [-90 0 0]]
+        # Output: Motl instance. To write the result to a file, you can run:
+        #           Motl.recenter_subparticle(motl_list, mask_list, size_list).write_to_emfile(outfile_path)
+
+        # Error tolerance - should be done differently and not hard-coded!!! TODO note from original code
+        epsilon = 0.00001
+
+        # Generete zero rotations in case they were not specified
+        if not rotations:
+            rotations = np.zeros((len(mask_list), 3))
+        new_motl_df = cls.create_empty_motl()
+
+        for el in range(len(mask_list)):
+            mask = cls.load(mask_list[el])
+            submotl = cls.load(motl_list[el])
+
+            # TODO should we really write out new mask files here?
+            # get path of the masks and output  TODO should be generalized in the emwrite method?
+            # output_path = fileparts(output_motl);
+            # if(isempty(output_path))
+            #     output_path='./';
+            # else
+            #     output_path=[ output_path '/' ];
+            mask_name = os.path.basename(mask_list[el])
+
+            # set sizes of new and old masks
+            mask_size = len(mask.df)
+            # new_size = repmat(size_list[i], 1, 3)
+            new_size = np.repeat(size_list[el], 3)
+            old_center = mask_size / 2
+            new_center = new_size / 2
+
+            # find center of mask  FIXME maybe approach differently in python
+            c_idx = [x for x in mask.df if x > epsilon]  # TODO map on the dataframe using apply
+            # TODO not sure there is a python method for that
+            i, j, k = ind2sub([len(mask.df), len(mask.df.columns)], c_idx)
+            s = [min(i), min(j), min(k)]
+            e = [max(i), max(j), max(k)]
+            mask_center = (s + e) / 2  # TODO s+e here probably does not do the same asi in matlab
+
+            # get shifts
+            shifts = mask_center - old_center;
+            shifts2 = round(mask_center - new_center)
+
+            # write out transformed mask to check it's as expeceted  # TODO should be preserved?
+            new_mask = tom_red(mask, shifts2, new_size)
+            if rotations[:, el] != 0:
+                new_mask = tom_rotate(new_mask, rotations[:, el])
+            new_mask.write_to_emfile(f'{output_path}/{mask_name}_centered_mask.em')
+
+            # change shifts in the motl accordingly
+            # TODO can we use these methods in place of the orignal code, or are there differences?
+            submotl.shift_positions(shifts, recenter_particles=True)
+            # create quatertions for rotation
+            if rotations[:, el] != 0:
+                q1 = euler2quat(submotl['phi'], submotl['psi'], submotl['theta'])
+                q2 = euler2quat(rotations[:, el])
+                mult = quat_mult(q2,q1)
+                new_angles = quat2euler(mult)
+            # m(17:19,:)=new_angles';
+
+            # add identifier in case of merge motls
+            submotl.df['geom_6'] = el
+
+            new_motl_df = pd.concat([new_motl_df, submotl])
+
+        new_motl = cls(new_motl_df)
+        new_motl.renumber_particles()
+
+        return new_motl
+
