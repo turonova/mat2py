@@ -120,3 +120,10 @@ def test_get_particle_intersection_wrong(m1, m2):
 def test_stopgap_to_av3(sg):
     motl = Motl.stopgap_to_av3(sg)
     check_emmotl(motl)
+
+
+@pytest.mark.parametrize('f', [0, 5, 'subtomo_id', 'geom2'])
+def test_split_by_feature(motl, f):
+    motls = motl.split_by_feature(f)
+    for motl in motls:
+        check_emmotl(motl)

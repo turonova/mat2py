@@ -241,6 +241,34 @@ class Motl:
         self.df.loc[:, 'subtomo_id'] = list(range(1, len(self.df)+1))
         return self
 
+    def split_by_feature(self, feature_id, write_out=False, output_prefix=None, feature_desc_id=None):
+        # Split motl by uniq values of a selected feature
+        # Inputs:   feature_id - column name or index of the feature based on witch the motl will be split
+        #           write: save all the resulting Motl instances into separate files if True
+        #           output_prefix:
+        #           feature_desc_id:  # TODO how should that var look like?
+        # Output: list of Motl instances, each containing only rows with one unique value of the given feature
+
+        feature = self.get_feature(self.df.columns, feature_id)
+        uniq_values = self.df.loc[:, feature].unique()
+        motls = list()
+
+        for value in uniq_values:
+            submotl = self.__class__(self.df.loc[self.df[feature] == value])
+            motls.append(submotl)
+
+            if write_out:
+                if feature_desc_id:
+                    for d in feature_desc_id:  # FIXME should not iterate here probably
+                        # out_name=[out_name '_' num2str(nm(d,1))];
+                        out_name = f'{output_prefix}_{str(d)}'
+                    out_name = f'{out_name}_.em'
+                else:
+                    out_name = f'{output_prefix}_{str(value)}.em'
+                submotl.write_to_emfile(out_name)
+
+        return motls
+
     ############################
     # PARTIALLY FINISHED METHODS
 
@@ -374,35 +402,6 @@ class Motl:
         if renumber_particles: self.renumber_particles()
 
         return self
-
-    def split_by_feature(self, feature_id, write_out=False, output_prefix=None, feature_desc_id=None):
-        # Split motl by uniq values of a selected feature
-        # Inputs:   feature_id - column name or index of the feature based on witch the motl will be split
-        #           write: save all the resulting Motl instances into separate files if True
-        #           output_prefix:
-        #           feature_desc_id:
-        # Output: list of Motl instances, each containing only rows with one unique value of the given feature
-
-        feature = self.get_feature(self.df.columns, feature_id)
-        uniq_values = self.df.loc[:, feature].unique()
-        motls = list()
-
-        for value in uniq_values:
-            submotl = self.__class__(self.df.loc[self.df[feature] == value])
-            motls.append(submotl)
-
-            if write_out:  # TODO really keep it here, or make a class method to support batch export?
-                if feature_desc_id:  # TODO what's that supposed to do?
-                    out_name = output_prefix
-                    # out_name=output_prefix;
-                    # for d=feature_desc_id
-                    #     out_name=[out_name '_' num2str(nm(d,1))];
-                    # out_name=[out_name  '.em'];
-                else:
-                    out_name = f'{output_prefix}_{str(value)}.em'
-                submotl.write_to_emfile(out_name)
-
-        return motls
 
     def keep_multiple_positions(self, feature_id, min_no_positions, distance_threshold):
         feature = self.get_feature(self.df.columns, feature_id)
