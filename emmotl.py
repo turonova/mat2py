@@ -118,6 +118,25 @@ class Motl:
 
         return loaded
 
+    @classmethod  # TODO move to different (sgmotl) module?
+    def stopgap_to_av3(cls, star_motl):
+        # Accepts input read from the star file (using the starfile.read), and outputs instance of Motl class
+        # To write the resulting em motl to the wile, run write_to_emfile.
+        # Example: Motl.stopgap_to_av3(starfile.read('path_to_star_file')).write_to_emfile('path_to_output_emfile')
+
+        motl = cls.create_empty_motl()
+        # TODO do we want to use 'motl_idx' as index of the dataframe or drop it?
+        # TODO should missing columns/values be replaced with zeroes, as it's in the original matlab code?
+        # TODO halfset -> subtomo_mean: cellfun(@(x) double(x)-64, star_motl.halfset)
+        pairs = {'subtomo_id': 'subtomo_num', 'tomo_id': 'tomo_num', 'object_id': 'object', 'x': 'orig_x',
+                 'y': 'orig_y', 'z': 'orig_z', 'score': 'score', 'shift_x': 'x_shift', 'shift_y': 'y_shift',
+                 'shift_z': 'z_shift', 'phi': 'phi', 'psi': 'psi', 'theta': 'the', 'class': 'class'}
+
+        for em_key, star_key in pairs.items():
+            motl[em_key] = star_motl[star_key]
+
+        return cls(motl)
+
     @classmethod
     def merge_and_renumber(cls, motl_list):
         merged_df = cls.create_empty_motl()

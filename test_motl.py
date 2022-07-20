@@ -1,6 +1,6 @@
 import numpy as np
-import pandas as pd
 import pytest
+import starfile
 
 from emmotl import Motl
 from exceptions import UserInputError
@@ -10,6 +10,12 @@ from exceptions import UserInputError
 def motl():
     motl = Motl.read_from_emfile('./example_files/au_1.em')
     return motl
+
+
+@pytest.fixture
+def sg():
+    sg = starfile.read('./example_files/au_1.star')
+    return sg
 
 
 @pytest.mark.parametrize('feature_id', ['score', 5])
@@ -29,15 +35,19 @@ def test_remove_feature_existing(motl, feature):
     assert float('0.063319') not in motl.remove_feature(feature, 0.063319).df.loc[:, 'score'].values
 
 
-@pytest.mark.parametrize('m', ['./example_files/test/au_1.em', './example_files/test/au_2.em'])
-def test_read_from_emfile(m):
+def check_emmotl(motl):
     # TODO check other critical aspects of the motl ?
-    motl = Motl.read_from_emfile(m)
     assert isinstance(motl.header, dict)
     assert np.array_equal(motl.df.columns, ['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
                                             'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z',
                                             'geom4', 'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
     assert all(dt == 'float64' for dt in motl.df.dtypes.values)
+
+
+@pytest.mark.parametrize('m', ['./example_files/test/au_1.em', './example_files/test/au_2.em'])
+def test_read_from_emfile(m):
+    motl = Motl.read_from_emfile(m)
+    check_emmotl(motl)
 
 
 @pytest.mark.parametrize('m', ['./example_files/test/col_missing.em', './example_files/test/extra_col.em'])
@@ -105,3 +115,8 @@ def test_get_particle_intersection(m1, m2):
 def test_get_particle_intersection_wrong(m1, m2):
     with pytest.raises(UserInputError):
         Motl.get_particle_intersection(m1, m2)
+
+
+def test_stopgap_to_av3(sg):
+    motl = Motl.stopgap_to_av3(sg)
+    check_emmotl(motl)
