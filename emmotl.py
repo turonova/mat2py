@@ -2,6 +2,7 @@ import emfile
 import numpy as np
 import os
 import pandas as pd
+import starfile
 import subprocess
 
 from exceptions import UserInputError
@@ -60,6 +61,14 @@ class Motl:
                 raise UserInputError('Given feature name does not correspond to any motl column.')
 
         return feature
+
+    @staticmethod  # TODO move to different (sgmotl) module?
+    def batch_stopgap2em(motl_base_name, iter_no):  # TODO add tests
+        for i in range(iter_no):
+            motl_path = f'{motl_base_name}_{str(i)}'
+            star_motl = starfile.read(f'{motl_path}.star')
+            motl = Motl.stopgap_to_av3(star_motl)
+            motl.write_to_emfile(f'{motl_path}.em')
 
     @classmethod
     def read_from_emfile(cls, emfile_path):
@@ -263,12 +272,6 @@ class Motl:
             # Create model files from the coordinates
             # system(['point2model -sc -sphere ' num2str(point_size) ' ' output_txt ' ' output_mod]);
             subprocess.run(['point2model', '-sc', '-sphere', str(point_size), output_txt, output_mod])
-
-    @staticmethod
-    def batch_stopgap2em(motl_base_name, iter_no):
-        for i in range(iter_no):
-            motl_name = f'{motl_base_name}_{str(i)}'
-            sg_motl_stopgap_to_av3(f'{motl_name}.star', f'{motl_name}.em')
 
     def clean_by_otsu(self, feature_id, histogram_bin=None):
         # Cleans motl by Otsu threshold (based on CC values)
