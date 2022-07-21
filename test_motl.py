@@ -127,3 +127,8 @@ def test_split_by_feature(motl, f):
     motls = motl.split_by_feature(f)
     for motl in motls:
         check_emmotl(motl)
+
+
+@pytest.mark.parametrize('m1, m2', [('./example_files/test/au_1.em', './example_files/test/au_2.em')])
+def test_class_consistency(m1, m2):  # TODO
+    intersect, bad, clo = Motl.class_consistency(m1, m2)
