@@ -26,7 +26,7 @@ class Motl:
     def create_empty_motl():
         empty_motl_df = pd.DataFrame(columns=['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
                                               'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
-                                              'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
+                                              'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'], dtype=float)
         return empty_motl_df
 
     @staticmethod  # TODO move to different module
@@ -175,16 +175,16 @@ class Motl:
 
     @classmethod
     def get_particle_intersection(cls, motl1, motl2):
-        # TODO currently keeps rows from motl1, is that ok? (are the remaining values of the row identical to motl2?)
+        # TODO too slow, do the comparison more efficiently
         m1, m2 = cls.load([motl1, motl2])
-        m2_values = m2.df.loc[:, 'subtomo_id'].values
+        m2_values = m2.df.loc[:, 'subtomo_id'].unique()
         intersected = cls.create_empty_motl()
 
         for value in m2_values:
             submotl = m1.df.loc[m1.df['subtomo_id'] == value]
             intersected = pd.concat([intersected, submotl])
 
-        return cls(intersected)
+        return cls(intersected.reset_index(drop=True))
 
     @classmethod
     def class_consistency(cls, *args):  # TODO add tests, maybe write in more pythonic way

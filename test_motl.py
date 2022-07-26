@@ -140,3 +140,17 @@ def test_split_by_feature(motl, f):
 @pytest.mark.parametrize('m1, m2', [('./example_files/test/au_1.em', './example_files/test/au_2.em')])
 def test_class_consistency(m1, m2):  # TODO
     intersect, bad, clo = Motl.class_consistency(m1, m2)
+
+
+@pytest.mark.parametrize('m1, m2, ref',
+                         [('./example_files/test/intersection/allmotl_sp_cl1_1.em', './example_files/test/intersection/allmotl_sp_cl1_1.em', './example_files/test/intersection/intersected_equal.em'),
+                          ('./example_files/test/intersection/allmotl_sp_cl1_1.em', './example_files/test/intersection/allmotl_sp_cl1_2.em', './example_files/test/intersection/intersected_same.em'),
+                          ('./example_files/test/intersection/allmotl_sp_cl1_1.em', './example_files/test/intersection/allmotl_sp_cl1_1_edited.em', './example_files/test/intersection/intersected_dif.em'),
+                          ('./example_files/test/intersection/allmotl_sp_cl1_1.em', './example_files/test/intersection/au_1.em', 'empty')])
+def test_get_particle_intersection(m1, m2, ref):
+    intersected = Motl.get_particle_intersection(m1, m2)
+    if os.path.isfile(ref):
+        ref_df = Motl.load(ref).df
+        assert intersected.df.equals(ref_df)
+    elif ref == 'empty':
+        assert len(intersected.df) == 0
