@@ -87,7 +87,7 @@ class Motl:
                             columns=['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
                                      'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
                                      'geom5', 'geom6', 'phi', 'psi', 'theta', 'class'])
-        motl['class'] = motl['class'].fillna(1)
+        motl['class'] = motl['class'].fillna(1.0)
 
         # TODO do we want to keep these? (from the original emmotl.py)
         # motl['subtomo_id'] = np.arange(1, number_of_particles + 1, 1)
@@ -140,13 +140,12 @@ class Motl:
 
         motl = cls.create_empty_motl()
         # TODO do we want to use 'motl_idx' as index of the dataframe or drop it?
-        # TODO halfset -> subtomo_mean: cellfun(@(x) double(x)-64, star_motl.halfset)
         pairs = {'subtomo_id': 'subtomo_num', 'tomo_id': 'tomo_num', 'object_id': 'object', 'x': 'orig_x',
                  'y': 'orig_y', 'z': 'orig_z', 'score': 'score', 'shift_x': 'x_shift', 'shift_y': 'y_shift',
                  'shift_z': 'z_shift', 'phi': 'phi', 'psi': 'psi', 'theta': 'the', 'class': 'class'}
-
         for em_key, star_key in pairs.items():
             motl[em_key] = star_motl[star_key]
+        motl['geom4'] = [0.0 if hs.lower() == 'a' else 1.0 for hs in star_motl['halfset']]
 
         return cls(motl)
 
@@ -239,7 +238,7 @@ class Motl:
 
     def write_to_emfile(self, outfile_path):
         # TODO currently replaces all missing values in the whole df, maybe should be more specific to some columns
-        filled_df = self.df.fillna(0)
+        filled_df = self.df.fillna(0.0)
         motl_array = filled_df.to_numpy()
         motl_array = motl_array.reshape((1, motl_array.shape[0], motl_array.shape[1]))
         # FIXME fails on writing back the header
