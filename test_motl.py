@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import pytest
 import starfile
 
@@ -120,6 +121,13 @@ def test_get_particle_intersection_wrong(m1, m2):
 def test_stopgap_to_av3(sg):
     motl = Motl.stopgap_to_av3(sg)
     check_emmotl(motl)
+
+
+@pytest.mark.parametrize('basename, iterations', [('./example_files/test/star/allmotl_sp_cl1', 5)])
+def test_batch_stopgap2em(basename, iterations):
+    converted = Motl.batch_stopgap2em(basename, iterations)
+    assert len(converted) == iterations
+    assert all(os.path.isfile(file) for file in converted)
 
 
 @pytest.mark.parametrize('f', [0, 5, 'subtomo_id', 'geom2'])

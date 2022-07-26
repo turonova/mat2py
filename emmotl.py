@@ -63,12 +63,17 @@ class Motl:
         return feature
 
     @staticmethod  # TODO move to different (sgmotl) module?
-    def batch_stopgap2em(motl_base_name, iter_no):  # TODO add tests
+    def batch_stopgap2em(motl_base_name, iter_no):
+        em_list = []
         for i in range(iter_no):
-            motl_path = f'{motl_base_name}_{str(i)}'
+            motl_path = f'{motl_base_name}_{str(i+1)}'
             star_motl = starfile.read(f'{motl_path}.star')
             motl = Motl.stopgap_to_av3(star_motl)
-            motl.write_to_emfile(f'{motl_path}.em')
+            em_path = f'{motl_path}.em'
+            motl.write_to_emfile(em_path)
+            em_list.append(em_path)
+
+        return em_list
 
     @classmethod
     def read_from_emfile(cls, emfile_path):
@@ -135,7 +140,6 @@ class Motl:
 
         motl = cls.create_empty_motl()
         # TODO do we want to use 'motl_idx' as index of the dataframe or drop it?
-        # TODO should missing columns/values be replaced with zeroes, as it's in the original matlab code?
         # TODO halfset -> subtomo_mean: cellfun(@(x) double(x)-64, star_motl.halfset)
         pairs = {'subtomo_id': 'subtomo_num', 'tomo_id': 'tomo_num', 'object_id': 'object', 'x': 'orig_x',
                  'y': 'orig_y', 'z': 'orig_z', 'score': 'score', 'shift_x': 'x_shift', 'shift_y': 'y_shift',
