@@ -445,37 +445,42 @@ class Motl:
 
         for t in tomos:
             tomo_str = self.pad_with_zeros(t, 3)
-            tm = self.df.loc[self.df['tomo_id'] == t]
+            tm = self.df.loc[self.df['tomo_id'] == t].reset_index(drop=True)
 
-            tdim = tomos_dim.loc[tomos_dim[0] == t, ['geom1', 'geom2', 'subtomo_id']]
-            pos = tm.loc[:, ['x', 'y', 'z']] + tm.loc[:, ['shift_x', 'shift_y', 'shift_z']]
+            tdim = tomos_dim.loc[tomos_dim[0] == t, 1:3]
+            # pos=tm(8:10,:)+tm(11:13,:);  TODO check that is what it should do
+            pos = pd.concat([(tm.loc[:, 'x'] + tm.loc[:, 'shift_x']),
+                             (tm.loc[:, 'y'] + tm.loc[:, 'shift_y']),
+                             (tm.loc[:, 'z'] + tm.loc[:, 'shift_z'])], axis=1)
 
-            mod_file_name = os.path.join(model_path, tomo_str, model_suffix, '.mod')
-
-            # if(exist(mod_file_name, 'file') ~= 2)
-            if os.path.isfile(mod_file_name):
+            # TODO what is model_suffix supposed to be?
+            mod_file_name = os.path.join(model_path, tomo_str, model_suffix)
+            if os.path.isfile(f'{mod_file_name}.mod'):
+                raise UserInputError(f'File to be generated ({mod_file_name}.mod) already exists in the destination. '
+                                     f'Aborting the process to avoid overriding the existing file.')
+            else:
                 cleaned_motl = pd.concat([cleaned_motl, tm])
 
-            subprocess.run(['model2point', '-object', mod_file_name, f'{mod_file_name}.txt'])
-                           # stdout=out_file, stderr=out_err, check=True)
-            coord = pd.read_csv(f'{mod_file_name}.txt')  # TODO dlmread
-            # carbon_edge=geometry_spline_sampling(coord(:,3:5)',2);
-            carbon_edge = geometry_spline_sampling(coord.iloc[2:4, :], 2)
+            subprocess.run(['model2point', '-object', f'{mod_file_name}.mod', f'{mod_file_name}.txt'])
+            coord = pd.read_csv(f'{mod_file_name}.txt', sep='\t')
+            carbon_edge = self.spline_sampling(coord.iloc[:, 2:4], 2)
 
+            # TODO adjust based on carbon_edge
             all_points = []
-            # for z=1:2:tdim(3) TODO
-                # z_points=carbon_edge';
-                # z_points(:,3)=z;
-                # all_points=[all_points; z_points];
+            for z in tdim[:2:2]:
+                z_points = carbon_edge
+                z_points[:, 2] = z
+                all_points.append(z_points)
 
-            # for p=1:size(pos,2) TODO remove from df
-                # [np npd]=dsearchn(all_points,pos(:,p)');
-                # if npd < distance_threshold:
-                #     rm_idx=[rm_idx p];
-            # tm(:,rm_idx)=[];
-
+            rm_idx = []
+            for p in len(pos):
+                _, npd = dsearchn(all_points, pos.iloc[p, :])
+                if npd < distance_threshold:
+                    rm_idx.append(p)  # TODO is this reliable? do the idx from pos correspond to idx in tm?
+            tm.drop(rm_idx, inplace=True)
             cleaned_motl = pd.concat([cleaned_motl, tm])
 
+        self.df = cleaned_motl
         return self
 
     def keep_multiple_positions(self, feature_id, min_no_positions, distance_threshold):
