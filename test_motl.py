@@ -171,3 +171,10 @@ def test_clean_by_otsu(m, feature, hist, ref):
     different_rows = motl.df.merge(ref_motl.df, how='outer', indicator=True).loc[lambda x: x['_merge'] != 'both']
     print(different_rows)
     # assert motl.df.equals(ref_motl.df)
+
+
+@pytest.mark.parametrize('m, feature_id, output_base, point_size, binning',
+                         [('./example_files/mod/allmotl_sp_cl1_1.em', 4, './example_files/test/mod/testmod', None, None)])
+def test_write_to_model_file(m, feature_id, output_base, point_size, binning):
+    motl = Motl.load(m)
+    motl.write_to_model_file(feature_id, output_base, point_size, binning)

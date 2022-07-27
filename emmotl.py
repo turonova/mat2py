@@ -263,6 +263,37 @@ class Motl:
         # FIXME fails on writing back the header
         emfile.write(outfile_path, motl_array, self.header, overwrite=True)
 
+    def write_to_model_file(self, feature_id, output_base, point_size, binning=None):
+        feature = self.get_feature(self.df.columns, feature_id)
+        uniq_values = self.df.loc[:, feature].unique()
+        outpath = f'{output_base}_{feature}_'
+
+        if binning:
+            bin = binning
+        else:
+            bin = 1
+
+        for value in uniq_values:
+            fm = self.df.loc[self.df[feature] == value].reset_index(drop=True)
+            feature_str = self.pad_with_zeros(value, 3)
+            output_txt = f'{outpath}{feature_str}_model.txt'
+            output_mod = f'{outpath}{feature_str}.mod'
+
+            # FIXME apply correct coordinate conversion
+            pos_x = (fm.loc[:, 'x'] + fm.loc[:, 'shift_x']) * bin
+            pos_y = (fm.loc[:, 'y'] + fm.loc[:, 'shift_y']) * bin
+            pos_z = (fm.loc[:, 'z'] + fm.loc[:, 'shift_z']) * bin
+            klass = fm.loc[:, 'class']
+            dummy = pd.Series(np.repeat(1, len(fm)))
+
+            pos_df = pd.concat([klass, dummy, pos_x, pos_y, pos_z], axis=1)
+            pos_df = pos_df.astype(int)
+            pos_df.to_csv(output_txt, sep='\t', header=False, index=False)
+
+            # Create model files from the coordinates
+            # system(['point2model -sc -sphere ' num2str(point_size) ' ' output_txt ' ' output_mod]);
+            # subprocess.run(['point2model', '-sc', '-sphere', str(point_size), output_txt, output_mod])
+
     def remove_feature(self, feature_id, feature_values):
         # Removes particles based on their feature (i.e. tomo number)
         # Inputs: feature_id - col name or index based on which the particles will be removed (i.e. 4 for tomogram id)
@@ -385,37 +416,6 @@ class Motl:
 
     ############################
     # PARTIALLY FINISHED METHODS
-
-    def write_to_model_file(self, feature_id, output_base, point_size, binning=None):
-        feature = self.get_feature(self.df.columns, feature_id)
-        uniq_values = self.df.loc[:, feature].unique()
-        output_base = f'{output_base}_{feature}_'
-
-        if binning:
-            bin = binning
-        else:
-            bin = 1
-
-        for value in uniq_values:
-            fm = self.df.loc[self.df[feature] == value]
-            tomo_str = self.pad_with_zeros(value, 3)
-            output_txt = f'{output_base}{tomo_str}_model.txt'
-            output_mod = f'{output_base}{tomo_str}.mod'
-
-            pos_x = (fm.loc[:, 'x'] + fm.loc[:, 'shift_x']) * bin
-            pos_y = (fm.loc[:, 'y'] + fm.loc[:, 'shift_y']) * bin
-            pos_z = (fm.loc[:, 'z'] + fm.loc[:, 'shift_z']) * bin
-
-            # pos = [ fm(20,:)' repmat(1,size(fm,2),1) pos]; TODO
-
-            pos_df = pd.concat([pos_x, pos_y, pos_z], axis=1)
-            pos_df.to_csv(output_txt, sep='\t')
-
-            # Create model files from the coordinates
-            # system(['point2model -sc -sphere ' num2str(point_size) ' ' output_txt ' ' output_mod]);
-            subprocess.run(['point2model', '-sc', '-sphere', str(point_size), output_txt, output_mod])
-
-        return self
 
     def shift_positions(self, shift, recenter_particles=False):
         # Shifts positions of all subtomgoram in the motl in the direction given by subtomos' rotations
