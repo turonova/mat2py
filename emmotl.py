@@ -32,18 +32,15 @@ class Motl:
 
     @staticmethod  # TODO move to different module
     def pad_with_zeros(number, total_digits):
-        # Creates a string of the ngth specified by total_digits, containing a given number and fills the rest
+        # Creates a string of the length specified by total_digits, containing a given number and fills the rest
         # (at the beginning) with zeros, i.e. from the input parameters 3 and 6 it creates 000003)
         #
-        # Input:  number - number to be padded with zero
+        # Input:  number - number to be padded with zero (converts the number to integer)
         #         total_digits - final length of the output string
         # Output: string of length specified by total_digits and containing the input number at the very end
 
-        padded_str = ''  # TODO do more efficiently ?
-        zeros = total_digits - len(str(number))
-        for _ in zeros:
-            padded_str += '0'
-        padded_str += str(number)
+        zeros = '0' * (total_digits - len(str(int(number))))
+        padded_str = zeros + str(int(number))
 
         return padded_str
 
