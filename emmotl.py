@@ -328,7 +328,7 @@ class Motl:
 
         return self
 
-    def tomo_subset(self, tomo_numbers, renumber_particles=False):  # TODO add tests
+    def tomo_subset(self, tomo_numbers):  # TODO add tests
         # Updates motl to contain only particles from tomograms specified by tomo numbers
         # Input: tomo_numbers - list of selected tomogram numbers to be included
         #        renumber_particles - renumber from 1 to the size of the new motl if True
@@ -339,7 +339,6 @@ class Motl:
             new_motl = pd.concat([new_motl, df_i])
         self.df = new_motl
 
-        if renumber_particles: self.renumber_particles()
         return self
 
     def renumber_particles(self):  # TODO add tests
@@ -417,7 +416,7 @@ class Motl:
     ############################
     # PARTIALLY FINISHED METHODS
 
-    def shift_positions(self, shift, recenter_particles=False):
+    def shift_positions(self, shift):
         # Shifts positions of all subtomgoram in the motl in the direction given by subtomos' rotations
 
         def shift_coords(row):
@@ -428,7 +427,6 @@ class Motl:
             return row
 
         self.df = self.df.apply(shift_coords, axis=1)
-        if recenter_particles: self.update_coordinates()
         return self
 
     def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions, renumber_particles=False):
@@ -475,8 +473,6 @@ class Motl:
             # tm(:,rm_idx)=[];
 
             cleaned_motl = pd.concat([cleaned_motl, tm])
-
-        if renumber_particles: self.renumber_particles()
 
         return self
 
