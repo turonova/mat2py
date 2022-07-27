@@ -94,6 +94,15 @@ class Motl:
 
         return s_max[0]
 
+    @staticmethod
+    def load_dimensions(dims):
+        # TODO should the first column be used as an index?
+        if os.path.isfile(dims):
+            dimensions = pd.read_csv(dims, sep='\t')
+        else:
+            dimensions = pd.DataFrame(dims)
+        return dimensions
+
     @classmethod
     def read_from_emfile(cls, emfile_path):
         header, parsed_emfile = emfile.read(emfile_path)
@@ -429,15 +438,8 @@ class Motl:
         self.df = self.df.apply(shift_coords, axis=1)
         return self
 
-    def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions, renumber_particles=False):
-        if os.path.isfile(dimensions):
-            # TODO what is the commonly used delimeter? The matlab dlmread detected the delimeter automatically
-            # Does it have a header, index, or any other specificities?
-            tomos_dim = pd.read_csv(dimensions)
-        else:  # TODO where does the raw matrix come from?
-            tomos_dim = pd.DataFrame(dimensions)
-
-        model_path = string_path_complete(model_path)
+    def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions):
+        tomos_dim = self.load_dimensions(dimensions)
         tomos = self.df.loc[:, 'tomo_id'].unique()
         cleaned_motl = self.__class__.create_empty_motl()
 
