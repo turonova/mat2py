@@ -6,6 +6,7 @@ import starfile
 import subprocess
 
 from exceptions import UserInputError
+from matplotlib import pyplot as plt
 
 
 class Motl:
@@ -74,6 +75,27 @@ class Motl:
             em_list.append(em_path)
 
         return em_list
+
+    @staticmethod  # TODO move to different module?
+    def otsu_threshold(bin_counts):
+        # Taken from: https://www.kdnuggets.com/2018/10/basic-image-analysis-python-p4.html
+        s_max = (0, 0)
+
+        for threshold in range(len(bin_counts)):
+            # update
+            w_0 = sum(bin_counts[:threshold])
+            w_1 = sum(bin_counts[threshold:])
+
+            mu_0 = sum([i * bin_counts[i] for i in range(0, threshold)]) / w_0 if w_0 > 0 else 0
+            mu_1 = sum([i * bin_counts[i] for i in range(threshold, len(bin_counts))]) / w_1 if w_1 > 0 else 0
+
+            # calculate - inter class variance
+            s = w_0 * w_1 * (mu_0 - mu_1) ** 2
+
+            if s > s_max[1]:
+                s_max = (threshold, s)
+
+        return s_max[0]
 
     @classmethod
     def read_from_emfile(cls, emfile_path):
@@ -325,6 +347,45 @@ class Motl:
 
         return motls
 
+    def clean_by_otsu(self, feature_id, histogram_bin=None):  # TODO returns slightly different result than matlab, probably due to otsu_threshold definition
+        # TODO allow only 'tomo_id' and 'obejct_id', or can it be any other feature? (would the another feature also need tomo_id?)
+        # Cleans motl by Otsu threshold (based on CC values)
+        # feature_id: a feature by which the subtomograms will be grouped together for cleaning;
+        #             4 or 'tomo_id' to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
+        # histogram_bin: how fine to split the histogram. Default is 30 for feature 5 and 40 for feature 4;
+        #             for smaller number of subtomograms per feature the number should be lower
+
+        feature = self.get_feature(self.df.columns, feature_id)
+        tomos = self.df.loc[:, 'tomo_id'].unique()
+        cleaned_motl = self.__class__.create_empty_motl()
+
+        if histogram_bin:
+            hbin = histogram_bin
+        else:
+            if feature == 'tomo_id':
+                hbin = 40
+            elif feature == 'object_id':
+                hbin = 30
+            else:
+                raise UserInputError(f'The selected feature ({feature}) does not correspond either to tomo_id, nor to'
+                                     f'object_id. You need to specify the histogram_bin.')
+
+        for t in tomos:  # if feature == object_id, tomo_id needs to be used too
+            tm = self.df.loc[self.df['tomo_id'] == t]
+            features = tm.loc[:, feature].unique()
+
+            for f in features:
+                fm = tm.loc[tm[feature] == f]
+                bin_counts, bin_centers, _ = plt.hist(fm.loc[:, 'score'])
+                bn = self.otsu_threshold(bin_counts)
+                cc_t = bin_centers[bn]
+                fm = fm.loc[fm['score'] >= cc_t]
+
+                cleaned_motl = pd.concat([cleaned_motl, fm])
+
+        self.df = cleaned_motl.reset_index(drop=True)
+        return self
+
     ############################
     # PARTIALLY FINISHED METHODS
 
@@ -357,43 +418,6 @@ class Motl:
             # system(['point2model -sc -sphere ' num2str(point_size) ' ' output_txt ' ' output_mod]);
             subprocess.run(['point2model', '-sc', '-sphere', str(point_size), output_txt, output_mod])
 
-    def clean_by_otsu(self, feature_id, histogram_bin=None):
-        # TODO if object_id, tomo_id needs to be specified too
-        # Cleans motl by Otsu threshold (based on CC values)
-        # feature_id: a feature by which the subtomograms will be grouped together for cleaning;
-        #             4 or 'tomo_id' to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
-        # histogram_bin: how fine to split the histogram. Default is 30 for feature 5 and 40 for feature 4;
-        #             for smaller number of subtomograms per feature the number should be lower
-
-        feature = self.get_feature(self.df.columns, feature_id)
-        tomos = self.df.loc[:, 'tomo_id'].unique()
-        cleaned_motl = self.__class__.create_empty_motl()
-
-        if histogram_bin:
-            hbin = histogram_bin
-        else:
-            if feature == 'tomo_id':
-                hbin = 40
-            elif feature == 'object_id':
-                hbin = 30
-            else:
-                raise UserInputError(f'The selected feature ({feature}) does not correspond either to tomo_id, nor to'
-                                     f'object_id. You need to specify the histogram_bin.')
-
-        for t in tomos:
-            tm = self.df.loc[self.df['tomo_id'] == t]
-            features = self.df.loc[:, feature].unique()
-
-            for f in features:
-                fm = tm.loc[tm[feature] == f]
-                h = histogram(fm.loc[:, 'score'], hbin)
-                bn = math_otsu_threshold(h.BinCounts)
-                cc_t = h.BinEdges(bn)
-                fm = fm.loc[fm['score'] >= cc_t]
-
-                cleaned_motl = pd.concat([cleaned_motl, fm])
-
-        self.df = cleaned_motl
         return self
 
     def shift_positions(self, shift, recenter_particles=False):

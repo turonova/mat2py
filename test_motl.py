@@ -154,3 +154,20 @@ def test_get_particle_intersection(m1, m2, ref):
         assert intersected.df.equals(ref_df)
     elif ref == 'empty':
         assert len(intersected.df) == 0
+
+
+@pytest.mark.parametrize('m, feature, hist, ref',
+                         [('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'tomo_id', None, './example_files/test/otsu/cleaned_1.em')])
+                         # [('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'tomo_id', None, './example_files/test/otsu/cleaned_1.em'),
+                         #  ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'object_id', None, './example_files/test/otsu/cleaned_2.em'),
+                         #  ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'tomo_id', 30, './example_files/test/otsu/cleaned_3.em'),
+                         #  ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'object_id', 20, './example_files/test/otsu/cleaned_4.em'),
+                         #  ('./example_files/test/otsu/au_1.em', 'tomo_id', None, './example_files/test/otsu/cleaned_5.em')
+                         #  ])
+def test_clean_by_otsu(m, feature, hist, ref):
+    motl, ref_motl = Motl.load([m, ref])
+    motl.clean_by_otsu(feature, hist)
+
+    different_rows = motl.df.merge(ref_motl.df, how='outer', indicator=True).loc[lambda x: x['_merge'] != 'both']
+    print(different_rows)
+    # assert motl.df.equals(ref_motl.df)
