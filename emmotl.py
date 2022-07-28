@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import starfile
 import subprocess
+from scipy.spatial.transform import Rotation as rot
+
 
 from exceptions import UserInputError
 from math import ceil
@@ -466,7 +468,11 @@ class Motl:
         # Shifts positions of all subtomgoram in the motl in the direction given by subtomos' rotations
 
         def shift_coords(row):
-            rshifts = tom_pointrotate(shift, row['phi'], row['psi'], row['theta'])
+            v = np.array(shift)
+            euler_angles = np.array([[row['phi'], row['psi'], row['theta']]])
+            orientations = rot.from_euler(seq='zxz', angles=euler_angles, degrees=True)
+            rshifts = orientations.apply(v) 
+            
             row['shift_x'] = row['shift_x'] + rshifts
             row['shift_y'] = row['shift_y'] + rshifts
             row['shift_z'] = row['shift_z'] + rshifts
