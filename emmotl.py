@@ -105,6 +105,22 @@ class Motl:
             dimensions = pd.DataFrame(dims)
         return dimensions
 
+    @staticmethod
+    def recenter_particles(df):
+        new_df = df.copy()
+        shifted_x = new_df.loc[:, 'x'] + new_df.loc[:, 'shift_x']
+        shifted_y = new_df.loc[:, 'y'] + new_df.loc[:, 'shift_y']
+        shifted_z = new_df.loc[:, 'z'] + new_df.loc[:, 'shift_z']
+
+        new_df.loc[:, 'x'] = round(shifted_x)
+        new_df.loc[:, 'y'] = round(shifted_y)
+        new_df.loc[:, 'z'] = round(shifted_z)
+        new_df.loc[:, 'shift_x'] = shifted_x - new_df.loc[:, 'x']
+        new_df.loc[:, 'shift_y'] = shifted_y - new_df.loc[:, 'y']
+        new_df.loc[:, 'shift_z'] = shifted_z - new_df.loc[:, 'z']
+
+        return new_df
+
     @classmethod
     def read_from_emfile(cls, emfile_path):
         header, parsed_emfile = emfile.read(emfile_path)
@@ -326,17 +342,7 @@ class Motl:
         return self
 
     def update_coordinates(self):  # TODO add tests
-        shifted_x = self.df.loc[:, 'x'] + self.df.loc[:, 'shift_x']
-        shifted_y = self.df.loc[:, 'y'] + self.df.loc[:, 'shift_y']
-        shifted_z = self.df.loc[:, 'z'] + self.df.loc[:, 'shift_z']
-
-        self.df.loc[:, 'x'] = round(shifted_x)
-        self.df.loc[:, 'y'] = round(shifted_y)
-        self.df.loc[:, 'z'] = round(shifted_z)
-        self.df.loc[:, 'shift_x'] = shifted_x - self.df.loc[:, 'x']
-        self.df.loc[:, 'shift_y'] = shifted_y - self.df.loc[:, 'y']
-        self.df.loc[:, 'shift_z'] = shifted_z - self.df.loc[:, 'z']
-
+        self.df = self.recenter_particles(self.df)
         return self
 
     def tomo_subset(self, tomo_numbers):  # TODO add tests
