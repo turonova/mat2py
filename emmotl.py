@@ -7,6 +7,7 @@ import subprocess
 
 from exceptions import UserInputError
 from matplotlib import pyplot as plt
+from scipy.interpolate import UnivariateSpline
 
 
 class Motl:
@@ -437,6 +438,47 @@ class Motl:
 
         self.df = self.df.apply(shift_coords, axis=1)
         return self
+
+    @staticmethod
+    def spline_sampling(coords, sampling_distance):
+        # Samples a spline specified by coordinates with a given sampling distance
+        # Input:  coords - coordinates of the spline
+        #         sampling_distance: sampling frequency in pixels
+        # Output: coordinates of points on the spline
+
+        # F=spline(1:size(coord,2),coord)
+        spline = UnivariateSpline(np.arrange(0, len(coords)), coords)  # TODO ensure right interpolation
+
+        # Keep track of steps across whole tube
+        totalsteps = 0
+
+        for n in range(len(coords)):
+            if n == 0: continue
+            # Calculate projected distance between each point
+            xc = coords[n, 'x'] - coords[n-1, 'x']
+            yc = coords[n, 'y'] - coords[n-1, 'y']
+            zc = coords[n, 'z'] - coords[n-1, 'z']
+
+            # Calculate Euclidian distance between points
+            dist = np.sqrt((xc ** 2) + (yc ** 2) + (zc ** 2))
+
+            # Number of steps between two points; steps are roughly in increments of 1 pixel
+            stepnumber = round(dist / sampling_distance)
+            # Length of each step
+            step = 1 / stepnumber
+            # Array to hold fraction of each step between points
+            t = np.arrange(n-1, n, step)  # inclusive end in matlab
+
+            # Evaluate piecewise-polynomial, i.e. spline, at steps 't'.
+            # This array contains the Cartesian coordinates of each step
+
+            # Ft(:,totalsteps+1:totalsteps+size(t,2))=ppval(F, t) TODO
+            spline_t = spline(t)
+
+            # Increment the step counter
+            totalsteps += len(t)
+
+            return spline_t
 
     def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions):
         tomos_dim = self.load_dimensions(dimensions)
