@@ -6,6 +6,7 @@ import starfile
 import subprocess
 
 from exceptions import UserInputError
+from math import ceil
 from matplotlib import pyplot as plt
 from scipy.interpolate import UnivariateSpline
 
@@ -629,3 +630,38 @@ class Motl:
 
         return new_motl
 
+    def remove_out_of_bounds_particles(self, dimensions, boundary_type, box_size, recenter_particles):
+        dim = self.load_dimensions(dimensions)
+        original_size = len(self.df)
+
+        # Get type of bounds
+        if boundary_type == 'whole':
+            boundary = ceil(box_size/2)
+        elif boundary_type == 'center':
+            boundary = 0
+        else:
+            raise UserInputError(f'Unknown type of boundaries: {boundary_type}')
+
+        if recenter_particles:  # TODO missing the rounding step at the end
+            self.update_coordinates()
+
+        cleaned_motl = self.__class__.create_empty_motl()
+
+        def check_boundaries(row):  # TODO do I need to use update coordinates here even if there
+            global cleaned_motl
+
+            tn = row['tomo_id']
+            tomo_dim = dim.loc[dim[0] == tn, 1:3]
+
+            c_min = [c - boundary for c in row['x':'z']]
+            c_max = [c + boundary for c in row['x':'z']]
+
+            if (all(c_min) >= 0) and (c_max[0] < tomo_dim[0]) and (c_max[1] < tomo_dim[1]) and (c_max[2] < tomo_dim[2]):
+                cleaned_motl = pd.concat([cleaned_motl, row])
+            return row
+
+        self.df.apply(check_boundaries, axis=1)
+        self.df = cleaned_motl.reset_index(drop=True)
+        print(f'Removed {original_size - len(self.df)} particles.')
+
+        return self
