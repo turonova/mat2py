@@ -10,6 +10,7 @@ from scipy.spatial.transform import Rotation as rot
 from exceptions import UserInputError
 from math import ceil
 from matplotlib import pyplot as plt
+from numpy.matlib import repmat
 from scipy.interpolate import UnivariateSpline
 
 
@@ -670,3 +671,236 @@ class Motl:
         new_motl.renumber_particles()
 
         return new_motl
+
+    @classmethod
+    def movement_convergence(cls, motl_base_name, iteration_range, f_std=None):
+        """outcome: [ad_all, dist_rmse_all, particle_conv]"""
+        c = 1
+        i = 1
+        m = cls.load(f'{motl_base_name}_{i}.em')
+        pc = len(m.df)
+
+        particle_stability = np.zeros((pc, 2))
+        particle_stability[:, 0] = m.df.loc[:, 'subtomo_id']
+
+        ad_all = []
+        dist_rmse_all = []
+
+        particle_conv = np.zeros((pc, iteration_range))
+
+        if f_std:
+            fstd = f_std
+        else:
+            fstd = 1
+
+        for i in range(2, iteration_range+1):
+            m1 = cls.load(f'{motl_base_name}_{i-1}.em')
+            m2 = cls.load(f'{motl_base_name}_{i}.em')
+
+            ad = angular_distance(m1.df.loc[:, ['phi', 'psi', 'theta']], m2.df.loc[:, ['phi', 'psi', 'theta']])
+            dist_rmse = geometry_point_distance(m1.df.loc[:, ['shift_x', 'shift_y', 'shift_z']], m2.df.loc[:, ['shift_x', 'shift_y', 'shift_z']])
+
+            ad_m = np.mean(ad)
+            ad_std = np.std(ad)
+
+            dr_m = np.mean(dist_rmse)
+            dr_std = np.std(dist_rmse)
+
+            # TODO: REWORK
+            #ad_pidx=m2(4,ad>ad_m+fstd*ad_std);
+            ad_pidx_arr = m2.df['subtomo_id'].values
+            ad_pidx_bool = ad > ad_m + f_std * ad_std
+            ad_pidx = np.column_stack((ad_pidx_arr, ad_pidx_bool))
+            #assuming that each part is an array
+            #dr_pidx=m2(4,dist_rmse>dr_m+fstd*dr_std);
+            dr_pidx_arr = m2.df['subtomo_id'].values
+            dr_pidx_bool = dist_rmse > dr_m + fstd * dr_std
+            dr_pidx = np.column_stack((dr_pidx_arr, dr_pidx_bool))
+
+            #f_pidx=ad_pidx(ismember(ad_pidx,dr_pidx));
+            f_pidx = ad_pidx[np.isin(ad_pidx, dr_pidx)]
+
+            #particle_conv(i-1,ismember(m2(4,:),f_pidx))=1;
+            particle_conv[np.isin(m2.df[:, 'subtomo_id'], f_pidx), i-1] = 1
+
+            ad_all.append(ad)
+            dist_rmse_all.append(dist_rmse)
+        
+        sp = np.sum(particle_conv, 1)
+        p = (sp > np.mean(sp) + np.std(sp)).nonzero()
+
+        good_motl = m2
+        good_motl.df[p, :] = []
+        bad_motl = m2.df[p, :]
+
+        # TODO: check it's correct this way
+        emfile.write(good_motl, [f'{motl_base_name}_good_{iteration_range}.em'])
+        emfile.write(bad_motl, [f'{motl_base_name}_bad_{iteration_range}.em'])
+
+        # TODO: REWORK the plots
+        plt.hist(sp)
+        plt.show()    
+        plt.plot(np.mean(ad_all, axis=1))
+        plt.show()
+
+        return ad_all, dist_rmse_all, particle_conv
+
+    @classmethod
+    def class_convergence(cls, motl_base_name, iteration_range):
+        """outcome: [ overall_changes, particle_stability, m_idx, particle_changes]"""
+
+        c = 1
+        i = 1
+
+        m = cls.load(f'{motl_base_name}_{i}.em')
+        pc = m.shape[0]
+
+        particle_stability = np.zeros((pc, 2))
+        particle_stability[:, 0] = m.loc[:, 'subtomo_id']
+
+        particle_changes = []
+        overall_changes = []
+
+        for i in range(2, iteration_range+1):
+            m1 = cls.load(f'{motl_base_name}_{iteration_range[i-1]}.em')
+            m2 = cls.load(f'{motl_base_name}_{iteration_range[i]}.em')
+
+            ch_idx = m1.score.ne(m2.score)
+            overall_changes.append(sum(ch_idx))
+
+            for i in range(particle_stability.shape[0]):
+                particle_stability[i, 1] += ch_idx[i]
+            
+            if c != 1:
+                ch_particles = sum(np.isin(m2[ch_idx, 'subtomo_id'], m_idx))
+                particle_changes.append(ch_particles/(pc * 100))
+            
+            # TODO: edit this part and check the fuctionality
+            m_idx = m2.loc[ch_idx, 'subtomo_id']
+            c += 1
+
+        # TODO: REWORK the plots
+        plt.plot(overall_changes)
+        plt.show()
+        plt.plot(particle_changes)
+        plt.show()
+        plt.hist(particle_stability[:, 1])
+        plt.show()
+
+        return overall_changes, particle_stability, m_idx, particle_changes
+
+    def split_particles_in_assymetric_units(self, motl, symmetry, particle_x_shift, start_offset=None, output_name=None):
+        """outcome: new_motl"""
+        if start_offset:
+            start_offset = start_offset
+        else:
+            start_offset = 0
+        
+        phi_angles = np.array([])
+        inplane_step = 360 / symmetry
+
+        for a in range(0, 360, int(inplane_step)):
+            phi_angles = np.append(phi_angles, a+start_offset)
+
+        # make up vectors
+        starting_vector = np.array([particle_x_shift, 0, 0])
+        rho = np.sqrt(starting_vector[0]**2 + starting_vector[1]**2)
+        the = np.arctan2(starting_vector[1], starting_vector[0])
+        z = starting_vector[2]
+
+        rot_rho = repmat(rho, symmetry, 1)
+        rot_rho = np.array([x + y for x,y in zip(rot_rho, phi_angles * np.pi / 180)])
+        rep_the = repmat(the, symmetry, 1)
+        rep_z = repmat(z, symmetry, 1)
+
+        # https://stackoverflow.com/questions/20924085/python-conversion-between-coordinates
+        # [center_shift(:, 1), center_shift(:, 2), center_shift(:, 3)] = pol2cart([0;0.785398163397448;1.570796326794897;2.356194490192345;3.141592653589793;3.926990816987241;4.712388980384690;5.497787143782138], repmat(10,8,1), repmat(0,8,1));
+        center_shift = np.zeros([rot_rho.shape[0], 3])
+        for i in range(center_shift.shape[0]):
+            center_shift[i][0] = rot_rho[i] * np.cos(rep_the[i])
+            center_shift[i][1] = rot_rho[i] * np.sin(rep_the[i])
+            center_shift[i][2] = rep_z[i]
+
+        #TODO: check the outcomes, vars and functionality from here 
+        motl = self.__class__.load(motl)
+        new_motl = self.create_empty_motl()
+
+        for i in range(len(motl)):
+
+            nm = repmat(motl.df[i, :], 1, symmetry)
+            nm[:, 15] = repmat(motl.df(i, 3), 1, symmetry)
+            nm.df.loc[:, 2] = [i for i in range(1, symmetry+1)] 
+
+            phi = motl.df[i, 16]
+            psi = motl.df[i, 17]
+            the = motl.df[i, 18]
+
+            xshift = motl.df[i, 10]
+            yshift = motl.df[i, 11]
+            zshift = motl.df[i, 12]
+
+            shift = repmat(np.array([xshift, yshift, zshift]), symmetry, 1)
+
+            #create centers
+            #new_centers = tom_pointrotate(center_shift, phi, psi, the) + shift
+            euler_angles = np.array([[phi, the, psi]])
+            orientations = rot.from_euler(seq='zxz', angles=euler_angles, degrees=True)
+            new_centers = orientations.apply(shift)
+
+            new_shifts = np.array([x + y for x,y in zip(new_centers, new_centers.round)]) # np.ndarray.round method
+            nm.df[:, 7:10] = np.array([x + y for x,y in zip(new_centers.round, nm.df[:, 7:10])])
+            nm.df[:, 10:13] = new_shifts
+
+            # phi angle correction 
+            nm.df[:, 16] = np.array([x + y for x, y in zip(repmat(phi, 1, symmetry), phi_angles)])
+
+            new_motl.df.concat(pd.DataFrame(nm.df.reshape(1,-1), columns=list(new_motl)), ignore_index=True)
+
+
+        new_motl.df.loc[:, 3] = [i for i in range(len(new_motl.df))]
+
+        if output_name:
+            self.__class__.write(new_motl, output_name) #replace function
+
+        self.df = new_motl
+        return self    
+
+    def sg_create_multiref(input_motl, number_of_classes, class_occupancy, number_of_runs, output_motl_name=None):
+        if output_motl_name:
+            output_motl = output_motl_name
+        else:
+            output_motl = f'{input_motl[:-2]}star'
+        
+        sg_motl_av3_to_stopgap(input_motl, output_motl)
+
+        iteration_number = string_get_numbers(output_motl, 'last')
+
+        # create random subsets for initial averages
+        for i in range(number_of_runs):
+            sg_motl_initialize_random_subset_classes(output_motl,
+                                                    number_of_classes,
+                                                    class_occupancy,
+                                                    f'{output_motl[:-6]}ref_mr{i}_{iteration_number}.star')
+
+        # random split into classes
+        sg_motl_apply_random_classes(output_motl,
+                                    number_of_classes,
+                                    output_motl) # ??? TODO: duplicate in the original script! repair
+
+    def get_pairwise_distance(p1, p2):
+        dist_func = lambda a, b: a + b
+
+        p1_dot = np.reshape(np.array(p1 * p1), ((p1.shape[0],1)))
+        p2_dot = p2 * p2
+
+        dist_a = dist_func(p1_dot, p2_dot)
+        dist_b = 2*(p1.reshape(((p1.shape[0],1)))*p2)
+        dist = dist_a - dist_b
+
+        # Find negative values
+        neg_idx = dist < 0
+        # Set negative values to zeroes
+        dist[neg_idx] = 0
+
+        dist = np.sqrt(dist)
+        return dist
