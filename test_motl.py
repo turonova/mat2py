@@ -61,7 +61,6 @@ def test_read_from_emfile_wrong(m):
 @pytest.mark.parametrize('m', ['./example_files/test/au_1.em',
                                ['./example_files/test/au_1.em', './example_files/test/au_2.em']])
 def test_load(m):
-    # TODO test Motl instance given (does not work within parametrize)
     loaded = Motl.load(m)
     if isinstance(m, list):
         assert len(m) == len(loaded)
@@ -173,7 +172,7 @@ def test_clean_by_otsu(m, feature, hist, ref):
     # assert motl.df.equals(ref_motl.df)
 
 
-@pytest.mark.parametrize('m, feature_id, output_base, point_size, binning',
+@pytest.mark.parametrize('m, feature_id, output_base, point_size, binning',  # TODO
                          [('./example_files/mod/allmotl_sp_cl1_1.em', 4, './example_files/test/mod/testmod', None, None)])
 def test_write_to_model_file(m, feature_id, output_base, point_size, binning):
     motl = Motl.load(m)

@@ -101,14 +101,13 @@ class Motl:
 
     @staticmethod
     def load_dimensions(dims):
-        # TODO should the first column be used as an index?
         if os.path.isfile(dims):
             dimensions = pd.read_csv(dims, sep='\t')
         else:
             dimensions = pd.DataFrame(dims)
         return dimensions
 
-    @staticmethod
+    @staticmethod  # TODO add tests
     def recenter_particles(df):
         new_df = df.copy()
         shifted_x = new_df.loc[:, 'x'] + new_df.loc[:, 'shift_x']
@@ -124,6 +123,25 @@ class Motl:
 
         return new_df
 
+    @staticmethod
+    def get_pairwise_distance(p1, p2):
+        dist_func = lambda a, b: a + b
+
+        p1_dot = np.reshape(np.array(p1 * p1), ((p1.shape[0],1)))
+        p2_dot = p2 * p2
+
+        dist_a = dist_func(p1_dot, p2_dot)
+        dist_b = 2*(p1.reshape(((p1.shape[0],1)))*p2)
+        dist = dist_a - dist_b
+
+        # Find negative values
+        neg_idx = dist < 0
+        # Set negative values to zeroes
+        dist[neg_idx] = 0
+
+        dist = np.sqrt(dist)
+        return dist
+
     @classmethod
     def read_from_emfile(cls, emfile_path):
         header, parsed_emfile = emfile.read(emfile_path)
@@ -131,7 +149,6 @@ class Motl:
             raise UserInputError(
                 f'Provided file contains {len(parsed_emfile[0][0])} columns, while 20 columns are expected.')
 
-        # TODO do we really want everything as float? (taken from the original parsed file)
         motl = pd.DataFrame(data=parsed_emfile[0], dtype=float,
                             columns=['score', 'geom1', 'geom2', 'subtomo_id', 'tomo_id', 'object_id',
                                      'subtomo_mean', 'x', 'y', 'z', 'shift_x', 'shift_y', 'shift_z', 'geom4',
@@ -149,7 +166,6 @@ class Motl:
 
     @classmethod
     def load(cls, input_motl):
-        # TODO allow to load correct motl/s if there are one or more corrupted?
         # Input: Load one or more emfiles (as a list), or already initialized instances of the Motl class
         #        E.g. `Motl.load([cryo1.em, cryo2.em, motl_instance1])`
         # Output: Returns one instance, or a list of instances if multiple inputs are provided
@@ -160,16 +176,20 @@ class Motl:
             raise UserInputError('At least one em file or a Motl instance must be provided.')
         else:
             for motl in motls:
-                # TODO can emfile have any other suffix?
-                if isinstance(motl, str) and os.path.isfile(motl) and (os.path.splitext(motl)[-1] == '.em'):
-                    new_motl = cls.read_from_emfile(motl)
-
-                elif isinstance(motl, cls):
+                if isinstance(motl, cls):
                     new_motl = motl
+                elif isinstance(motl, str):
+                    if os.path.isfile(motl):
+                        if os.path.splitext(motl)[-1] == '.em':
+                            new_motl = cls.read_from_emfile(motl)
+                        else:
+                            raise UserInputError(f'Unknown file type: {motl}. Input needs to be either an em file '
+                                                 f'(.em), or an instance of the Motl class.')
+                    else:
+                        raise UserInputError(f'Provided file {motl} does not exist.')
                 else:
-                    # TODO or will it still be possible to receive the motl in form of a pure matrix?
-                    raise UserInputError(f'Unknown input type: {motl}. '
-                                         f'Input needs to be either an em file (.em), or an instance of the Motl class.')
+                    raise UserInputError(f'Unkown input type ({motl}).')
+                # TODO or will it still be possible to receive the motl in form of a pure matrix?
 
                 if not np.array_equal(new_motl.df.columns, cls.create_empty_motl().columns):
                     raise UserInputError(f'Provided Motl object {motl} seems to be corrupted and can not be loaded.')
@@ -221,9 +241,8 @@ class Motl:
         merged_motl.renumber_particles()
         return merged_motl
 
-    @classmethod
+    @classmethod  # TODO too slow, do the comparison more efficiently
     def get_particle_intersection(cls, motl1, motl2):
-        # TODO too slow, do the comparison more efficiently
         m1, m2 = cls.load([motl1, motl2])
         m2_values = m2.df.loc[:, 'subtomo_id'].unique()
         intersected = cls.create_empty_motl()
@@ -234,8 +253,8 @@ class Motl:
 
         return cls(intersected.reset_index(drop=True))
 
-    @classmethod
-    def class_consistency(cls, *args):  # TODO add tests, maybe write in more pythonic way
+    @classmethod  # TODO add tests, maybe write in more pythonic way
+    def class_consistency(cls, *args):
         # TODO check the whole functionality against the matlab version (+ contents of the resulting objects)
         if len(args) < 2:
             raise UserInputError('At least 2 motls are needed for this analysis')
@@ -290,9 +309,10 @@ class Motl:
         filled_df = self.df.fillna(0.0)
         motl_array = filled_df.to_numpy()
         motl_array = motl_array.reshape((1, motl_array.shape[0], motl_array.shape[1]))
-        # FIXME fails on writing back the header
+        self.header = {}  # FIXME fails on writing back the header
         emfile.write(outfile_path, motl_array, self.header, overwrite=True)
 
+    # FIXME apply correct coordinate conversion
     def write_to_model_file(self, feature_id, output_base, point_size, binning=None):
         feature = self.get_feature(self.df.columns, feature_id)
         uniq_values = self.df.loc[:, feature].unique()
@@ -309,7 +329,6 @@ class Motl:
             output_txt = f'{outpath}{feature_str}_model.txt'
             output_mod = f'{outpath}{feature_str}.mod'
 
-            # FIXME apply correct coordinate conversion
             pos_x = (fm.loc[:, 'x'] + fm.loc[:, 'shift_x']) * bin
             pos_y = (fm.loc[:, 'y'] + fm.loc[:, 'shift_y']) * bin
             pos_z = (fm.loc[:, 'z'] + fm.loc[:, 'shift_z']) * bin
@@ -344,7 +363,7 @@ class Motl:
 
         return self
 
-    def update_coordinates(self):  # TODO add tests
+    def update_coordinates(self):
         self.df = self.recenter_particles(self.df)
         return self
 
@@ -394,8 +413,7 @@ class Motl:
 
         return motls
 
-    def clean_by_otsu(self, feature_id, histogram_bin=None):  # TODO returns slightly different result than matlab, probably due to otsu_threshold definition
-        # TODO allow only 'tomo_id' and 'obejct_id', or can it be any other feature? (would the another feature also need tomo_id?)
+    def clean_by_otsu(self, feature_id, histogram_bin=None):
         # Cleans motl by Otsu threshold (based on CC values)
         # feature_id: a feature by which the subtomograms will be grouped together for cleaning;
         #             4 or 'tomo_id' to group by tomogram, 5 to clean by a particle (e.g. VLP, virion)
@@ -886,21 +904,3 @@ class Motl:
         sg_motl_apply_random_classes(output_motl,
                                     number_of_classes,
                                     output_motl) # ??? TODO: duplicate in the original script! repair
-
-    def get_pairwise_distance(p1, p2):
-        dist_func = lambda a, b: a + b
-
-        p1_dot = np.reshape(np.array(p1 * p1), ((p1.shape[0],1)))
-        p2_dot = p2 * p2
-
-        dist_a = dist_func(p1_dot, p2_dot)
-        dist_b = 2*(p1.reshape(((p1.shape[0],1)))*p2)
-        dist = dist_a - dist_b
-
-        # Find negative values
-        neg_idx = dist < 0
-        # Set negative values to zeroes
-        dist[neg_idx] = 0
-
-        dist = np.sqrt(dist)
-        return dist
