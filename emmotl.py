@@ -102,9 +102,10 @@ class Motl:
     @staticmethod
     def load_dimensions(dims):
         if os.path.isfile(dims):
-            dimensions = pd.read_csv(dims, sep='\t')
+            dimensions = pd.read_csv(dims, sep='\s+', header=None)
         else:
             dimensions = pd.DataFrame(dims)
+        dimensions.columns = ['tomo_id', 'x', 'y', 'z']
         return dimensions
 
     @staticmethod  # TODO add tests
