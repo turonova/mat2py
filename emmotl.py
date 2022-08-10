@@ -108,8 +108,9 @@ class Motl:
         dimensions.columns = ['tomo_id', 'x', 'y', 'z']
         return dimensions
 
-    @staticmethod  # TODO add tests
+    @staticmethod
     def recenter_particles(df):
+        # Python 0.5 rounding: round(1.5) = 2, BUT round(2.5) = 2, while in Matlab round(2.5) = 3
         new_df = df.copy()
         shifted_x = new_df.loc[:, 'x'] + new_df.loc[:, 'shift_x']
         shifted_y = new_df.loc[:, 'y'] + new_df.loc[:, 'shift_y']
