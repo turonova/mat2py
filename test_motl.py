@@ -177,3 +177,20 @@ def test_clean_by_otsu(m, feature, hist, ref):
 def test_write_to_model_file(m, feature_id, output_base, point_size, binning):
     motl = Motl.load(m)
     motl.write_to_model_file(feature_id, output_base, point_size, binning)
+
+
+@pytest.mark.parametrize('m, dimensions, boundary_type, box_size, recenter, ref', [
+    ('./example_files/test/outofbounds/allmotl_sp_cl1_1.em', './example_files/test/outofbounds/dimensions.txt', 'whole', -1000, True, './example_files/test/outofbounds/ref1.em'),
+    ('./example_files/test/outofbounds/allmotl_sp_cl1_1.em', './example_files/test/outofbounds/dimensions.txt', 'whole', -1000, False, './example_files/test/outofbounds/ref2.em'),
+    ('./example_files/test/outofbounds/allmotl_sp_cl1_1.em', './example_files/test/outofbounds/dimensions.txt', 'center', None, True, './example_files/test/outofbounds/ref3.em'),
+    ('./example_files/test/outofbounds/allmotl_sp_cl1_1_edit.em', './example_files/test/outofbounds/dimensions.txt', 'whole', -1000, True, './example_files/test/outofbounds/ref4.em'),
+    ('./example_files/test/outofbounds/allmotl_sp_cl1_1_edit.em', './example_files/test/outofbounds/dimensions.txt', 'center', None, True, './example_files/test/outofbounds/ref5.em'),
+    ('./example_files/test/outofbounds/allmotl_sp_cl1_1_edit.em', './example_files/test/outofbounds/dimensions.txt', 'center', None, False, './example_files/test/outofbounds/ref6.em')])
+def test_remove_out_of_bounds_particles(m, dimensions, boundary_type, box_size, recenter, ref):
+    motl, ref_motl = Motl.load([m, ref])
+    motl.remove_out_of_bounds_particles(dimensions, boundary_type, box_size, recenter)
+    if not motl.df.equals(ref_motl.df):
+        merged = motl.df.merge(ref_motl.df, how='outer', indicator=True)
+        print('Rows only in the TEST dataframe: ', merged.loc[merged['_merge'] == 'left_only', 'x':'z'])
+        print('Rows only in the REF dataframe: ', merged.loc[merged['_merge'] == 'right_only', 'x':'z'])
+    assert motl.df.equals(ref_motl.df)

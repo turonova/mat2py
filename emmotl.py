@@ -452,14 +452,16 @@ class Motl:
         self.df = cleaned_motl.reset_index(drop=True)
         return self
 
-    # TODO add tests with proper dimensions file
-    def remove_out_of_bounds_particles(self, dimensions, boundary_type, box_size, recenter_particles):
+    def remove_out_of_bounds_particles(self, dimensions, boundary_type, box_size=None, recenter_particles=True):
         dim = self.load_dimensions(dimensions)
         original_size = len(self.df)
 
         # Get type of bounds
         if boundary_type == 'whole':
-            boundary = ceil(box_size/2)
+            if box_size:
+                boundary = ceil(box_size/2)
+            else:
+                raise UserInputError("You need to specify box_size when boundary_type is set to 'whole'.")
         elif boundary_type == 'center':
             boundary = 0
         else:
@@ -469,15 +471,18 @@ class Motl:
         idx_list = []
         for i, row in recentered.iterrows():
             tn = row['tomo_id']
-            tomo_dim = dim.loc[dim[0] == tn, 1:3]
+            tomo_dim = dim.loc[dim['tomo_id'] == tn, 'x':'z'].reset_index(drop=True)
             c_min = [c - boundary for c in row['x':'z']]
             c_max = [c + boundary for c in row['x':'z']]
-            if (all(c_min) >= 0) and (c_max[0] < tomo_dim[0]) and (c_max[1] < tomo_dim[1]) and (c_max[2] < tomo_dim[2]):
+            if (all(c_min) >= 0) and \
+                    (c_max[0] < tomo_dim['x'][0]) and (c_max[1] < tomo_dim['y'][0]) and (c_max[2] < tomo_dim['z'][0]):
                 idx_list.append(i)
 
         final_motl = recentered if recenter_particles else self.df
         self.df = final_motl.iloc[idx_list].reset_index(drop=True)
+
         print(f'Removed {original_size - len(self.df)} particles.')
+        print(f'Original size {original_size}, new_size {len(self.df)}')
 
         return self
 
