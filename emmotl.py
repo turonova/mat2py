@@ -126,22 +126,16 @@ class Motl:
         return new_df
 
     @staticmethod
-    def get_pairwise_distance(p1, p2):
-        dist_func = lambda a, b: a + b
+    def get_pairwise_distance(point1, point2):
+        # Input: p1, p2 - points in form of list or numpy array, e.g. np.array([[1, 1, 1]]) or [1, 1, 1]
+        p1 = np.array([np.array(point1)])
+        p2 = np.array([np.array(point2)])
+        dist = (p1*p1).transpose() + p2*p2 - 2*p1.transpose()*p2
 
-        p1_dot = np.reshape(np.array(p1 * p1), ((p1.shape[0],1)))
-        p2_dot = p2 * p2
-
-        dist_a = dist_func(p1_dot, p2_dot)
-        dist_b = 2*(p1.reshape(((p1.shape[0],1)))*p2)
-        dist = dist_a - dist_b
-
-        # Find negative values
-        neg_idx = dist < 0
         # Set negative values to zeroes
-        dist[neg_idx] = 0
-
+        dist[dist < 0] = 0
         dist = np.sqrt(dist)
+
         return dist
 
     @classmethod
