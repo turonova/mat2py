@@ -1,3 +1,4 @@
+import decimal
 import emfile
 import numpy as np
 import os
@@ -111,17 +112,20 @@ class Motl:
     @staticmethod
     def recenter_particles(df):
         # Python 0.5 rounding: round(1.5) = 2, BUT round(2.5) = 2, while in Matlab round(2.5) = 3
-        new_df = df.copy()
-        shifted_x = new_df.loc[:, 'x'] + new_df.loc[:, 'shift_x']
-        shifted_y = new_df.loc[:, 'y'] + new_df.loc[:, 'shift_y']
-        shifted_z = new_df.loc[:, 'z'] + new_df.loc[:, 'shift_z']
+        def round_and_recenter(row):
+            new_row = row.copy()
+            shifted_x = row['x'] + row['shift_x']
+            shifted_y = row['y'] + row['shift_y']
+            shifted_z = row['z'] + row['shift_z']
+            new_row['x'] = float(decimal.Decimal(shifted_x).to_integral_value(rounding=decimal.ROUND_HALF_UP))
+            new_row['y'] = float(decimal.Decimal(shifted_y).to_integral_value(rounding=decimal.ROUND_HALF_UP))
+            new_row['z'] = float(decimal.Decimal(shifted_z).to_integral_value(rounding=decimal.ROUND_HALF_UP))
+            new_row['shift_x'] = shifted_x - new_row['x']
+            new_row['shift_y'] = shifted_y - new_row['y']
+            new_row['shift_z'] = shifted_z - new_row['z']
+            return new_row
 
-        new_df.loc[:, 'x'] = round(shifted_x)
-        new_df.loc[:, 'y'] = round(shifted_y)
-        new_df.loc[:, 'z'] = round(shifted_z)
-        new_df.loc[:, 'shift_x'] = shifted_x - new_df.loc[:, 'x']
-        new_df.loc[:, 'shift_y'] = shifted_y - new_df.loc[:, 'y']
-        new_df.loc[:, 'shift_z'] = shifted_z - new_df.loc[:, 'z']
+        new_df = df.apply(round_and_recenter, axis=1)
 
         return new_df
 

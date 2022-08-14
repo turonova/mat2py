@@ -179,29 +179,13 @@ def test_write_to_model_file(m, feature_id, output_base, point_size, binning):
     motl.write_to_model_file(feature_id, output_base, point_size, binning)
 
 
-def test_after_recenter(motl, ref_motl):
-    # TO BE USED IN ALL TEST FOR METHODS APPLYING RECENTER_PARTICLES
-    # to take into account Python 0.5 rounding: round(1.5) = 2, BUT round(2.5) = 2, while in Matlab round(2.5) = 3
-    if not motl.df.equals(ref_motl.df):
-        merged = motl.df.merge(ref_motl.df, how='outer', indicator=True)
-        print('Rows only in the TEST dataframe:\n', merged.loc[merged['_merge'] == 'left_only', 'x':'z'])
-        print('Rows only in the REF dataframe\n: ', merged.loc[merged['_merge'] == 'right_only', 'x':'z'], '\n')
-        assert (motl.df.loc[:, 'x'] + motl.df.loc[:, 'shift_x']).equals(
-            ref_motl.df.loc[:, 'x'] + ref_motl.df.loc[:, 'shift_x'])
-        assert (motl.df.loc[:, 'y'] + motl.df.loc[:, 'shift_y']).equals(
-            ref_motl.df.loc[:, 'y'] + ref_motl.df.loc[:, 'shift_y'])
-        assert (motl.df.loc[:, 'z'] + motl.df.loc[:, 'shift_z']).equals(
-            ref_motl.df.loc[:, 'z'] + ref_motl.df.loc[:, 'shift_z'])
-
-
 @pytest.mark.parametrize('m, ref', [
     ('./example_files/test/recenter/allmotl_sp_cl1_1.em', './example_files/test/recenter/ref1.em'),
     ('./example_files/test/recenter/allmotl_sp_cl1_2.em', './example_files/test/recenter/ref2.em')])
 def test_recenter_particles(m, ref):
     motl, ref_motl = Motl.load([m, ref])
     motl.df = Motl.recenter_particles(motl.df)
-
-    test_after_recenter(motl, ref_motl)
+    assert motl.df.equals(ref_motl.df)
 
 
 @pytest.mark.parametrize('m, dimensions, boundary_type, box_size, recenter, ref', [
@@ -214,4 +198,4 @@ def test_recenter_particles(m, ref):
 def test_remove_out_of_bounds_particles(m, dimensions, boundary_type, box_size, recenter, ref):
     motl, ref_motl = Motl.load([m, ref])
     motl.remove_out_of_bounds_particles(dimensions, boundary_type, box_size, recenter)
-    test_after_recenter(motl, ref_motl)
+    assert motl.df.equals(ref_motl.df)
