@@ -199,3 +199,14 @@ def test_remove_out_of_bounds_particles(m, dimensions, boundary_type, box_size, 
     motl, ref_motl = Motl.load([m, ref])
     motl.remove_out_of_bounds_particles(dimensions, boundary_type, box_size, recenter)
     assert motl.df.equals(ref_motl.df)
+
+
+@pytest.mark.parametrize('m, feature, min_no_positions, distance_threshold, ref', [
+    ('./example_files/test/keep_multiple/allmotl_sp_cl1_1.em', 'object_id', 2, 1, './example_files/test/keep_multiple/ref1.em'),
+    ('./example_files/test/keep_multiple/allmotl_sp_cl1_1.em', 'tomo_id', 2, 1, './example_files/test/keep_multiple/ref2.em'),
+    ('./example_files/test/keep_multiple/allmotl_sp_cl1_5.em', 'tomo_id', 2, 2, './example_files/test/keep_multiple/ref3.em'),
+    ('./example_files/test/keep_multiple/allmotl_sp_cl1_5.em', 'object_id', 2, 1, './example_files/test/keep_multiple/ref4.em')])
+def test_keep_multiple_positions(m, feature, min_no_positions, distance_threshold, ref):
+    motl, ref_motl = Motl.load([m, ref])
+    motl.keep_multiple_positions(feature, min_no_positions, distance_threshold)
+    assert motl.df.equals(ref_motl.df)

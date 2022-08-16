@@ -487,6 +487,37 @@ class Motl:
 
         return self
 
+    def keep_multiple_positions(self, feature_id, min_no_positions, distance_threshold):
+        feature = self.get_feature(self.df.columns, feature_id)
+        tomos = self.df.loc[:, 'tomo_id'].unique()
+        new_motl = self.create_empty_motl()
+
+        for t in tomos:  # if feature == object_id, tomo_id needs to be used too
+            tm = self.df.loc[self.df['tomo_id'] == t]
+            features = tm.loc[:, feature].unique()
+
+            for f in features:
+                fm = tm.loc[tm[feature] == f].reset_index(drop=True)
+
+                for i, row in fm.iterrows():
+                    p1 = [row['x']+row['shift_x'], row['y']+row['shift_y'], row['z']+row['shift_z']]
+                    temp_dist = []
+                    for j, row in fm.iterrows():
+                        if i == j: continue
+                        p2 = [row['x']+row['shift_x'], row['y']+row['shift_y'], row['z']+row['shift_z']]
+                        dist = self.point2point_distance(p1, p2)
+                        temp_dist.append(dist)
+
+                    sp = [x for x in temp_dist if x < distance_threshold]
+                    if len(sp) > 0:
+                        fm.iloc[i, 15] = len(sp)
+
+                new_motl = pd.concat([new_motl, fm])
+
+        new_motl = new_motl.loc[new_motl['geom6'] >= min_no_positions]
+        self.df = new_motl.reset_index(drop=True)
+        return self
+
     ############################
     # PARTIALLY FINISHED METHODS
 
@@ -591,34 +622,6 @@ class Motl:
             cleaned_motl = pd.concat([cleaned_motl, tm])
 
         self.df = cleaned_motl
-        return self
-
-    def keep_multiple_positions(self, feature_id, min_no_positions, distance_threshold):
-        feature = self.get_feature(self.df.columns, feature_id)
-        uniq_values = self.df.loc[:, feature].unique()
-        new_motl = self.create_empty_motl()
-
-        for value in uniq_values:
-            fm = self.df.loc[self.df[feature] == value]
-
-            pos_x = fm.loc[:, 'x'] + fm.loc[:, 'shift_x']
-            pos_y = fm.loc[:, 'y'] + fm.loc[:, 'shift_y']
-            pos_z = fm.loc[:, 'z'] + fm.loc[:, 'shift_z']
-
-            for i, row in fm.iterrows():
-                position = [pos_x[i], pos_y[i], pos_z[i]]  # TODO fix to expected format
-                remaining_positions = [pos_x.drop(i), pos_y.drop(i), pos_z.drop(i)]
-                temp_dist = geometry_get_pairwise_distance(position, remaining_positions)
-
-                # sp = size((find(temp_dist<distance_threshold)),2);  # TODO again fix, based on the result format
-                sp = [x for x in temp_dist if x < distance_threshold]
-                if sp:
-                    row[15] = sp
-
-            new_motl = pd.concat([new_motl, fm])
-
-        new_motl = new_motl.loc[new_motl['geom6'] >= min_no_positions]  # TODO really should be 'geom6'?
-        self.df = new_motl
         return self
 
     @classmethod
