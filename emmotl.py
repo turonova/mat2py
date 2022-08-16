@@ -5,7 +5,6 @@ import os
 import pandas as pd
 import starfile
 import subprocess
-from scipy.spatial.transform import Rotation as rot
 
 
 from exceptions import UserInputError
@@ -13,6 +12,7 @@ from math import ceil
 from matplotlib import pyplot as plt
 from numpy.matlib import repmat
 from scipy.interpolate import UnivariateSpline
+from scipy.spatial.transform import Rotation as rot
 
 
 class Motl:
@@ -522,20 +522,22 @@ class Motl:
     # PARTIALLY FINISHED METHODS
 
     def shift_positions(self, shift):
-        # Shifts positions of all subtomgoram in the motl in the direction given by subtomos' rotations
+        # Shifts positions of all subtomgorams in the motl in the direction given by subtomos' rotations
+        # Input: shift - 3D vector - e.g. [1, 1, 1]. A vector in 3D is then rotated around the origin = [0 0 0].
+        #               Note that the coordinates are with respect to the origin!
 
         def shift_coords(row):
             v = np.array(shift)
             euler_angles = np.array([[row['phi'], row['psi'], row['theta']]])
             orientations = rot.from_euler(seq='zxz', angles=euler_angles, degrees=True)
-            rshifts = orientations.apply(v) 
-            
-            row['shift_x'] = row['shift_x'] + rshifts
-            row['shift_y'] = row['shift_y'] + rshifts
-            row['shift_z'] = row['shift_z'] + rshifts
+            rshifts = orientations.apply(v)
+
+            row['shift_x'] = row['shift_x'] + rshifts[0][0]
+            row['shift_y'] = row['shift_y'] + rshifts[0][1]
+            row['shift_z'] = row['shift_z'] + rshifts[0][2]
             return row
 
-        self.df = self.df.apply(shift_coords, axis=1)
+        self.df = self.df.apply(shift_coords, axis=1).reset_index(drop=True)
         return self
 
     @staticmethod

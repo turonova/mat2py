@@ -210,3 +210,20 @@ def test_keep_multiple_positions(m, feature, min_no_positions, distance_threshol
     motl, ref_motl = Motl.load([m, ref])
     motl.keep_multiple_positions(feature, min_no_positions, distance_threshold)
     assert motl.df.equals(ref_motl.df)
+
+
+@pytest.mark.parametrize('m, shift, ref', [
+    ('./example_files/test/shift_positions/allmotl_sp_cl1_1.em', [1, 2, 3], './example_files/test/shift_positions/ref1.em'),
+    ('./example_files/test/shift_positions/allmotl_sp_cl1_1.em', [-10, 200, 3.5], './example_files/test/shift_positions/ref2.em'),
+    ('./example_files/test/shift_positions/allmotl_sp_cl1_1.em', [0, 0, 0], './example_files/test/shift_positions/ref3.em'),
+    ('./example_files/test/shift_positions/allmotl_sp_cl1_1.em', [1, 1, 1], './example_files/test/shift_positions/ref4.em'),
+    ('./example_files/test/shift_positions/allmotl_sp_cl1_5.em', [-10, 10, 100], './example_files/test/shift_positions/ref5.em')])
+def test_shift_positions(m, shift, ref):
+    motl, ref_motl = Motl.load([m, ref])
+    motl.shift_positions(shift)
+    assert motl.df.equals(ref_motl.df)
+    # if not motl.df.equals(ref_motl.df):
+    #     merged = motl.df.merge(ref_motl.df, how='outer', indicator=True)
+    #     print('Rows only in the TEST dataframe:\n', merged.loc[merged['_merge'] == 'left_only', 'shift_x':'shift_z'])
+    #     print('Rows only in the REF dataframe\n: ', merged.loc[merged['_merge'] == 'right_only', 'shift_x':'shift_z'], '\n')
+
