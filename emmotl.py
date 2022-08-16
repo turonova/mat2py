@@ -130,14 +130,16 @@ class Motl:
         return new_df
 
     @staticmethod
-    def get_pairwise_distance(point1, point2):
-        # Input: p1, p2 - points in form of list or numpy array, e.g. np.array([[1, 1, 1]]) or [1, 1, 1]
-        p1 = np.array([np.array(point1)])
-        p2 = np.array([np.array(point2)])
-        dist = (p1*p1).transpose() + p2*p2 - 2*p1.transpose()*p2
+    def point2point_distance(point1, point2):
+        # Input: point1, point2 - points in form of list or numpy array, e.g. np.array([1, 1, 1]) or [1, 1, 1]
+        # Output: distance between the two points, float
+        p1 = np.array(point1)
+        p2 = np.array(point2)
+
+        dist = np.dot(p1.transpose(), p1) + np.dot(p2.transpose(), p2) - 2*(np.dot(p1.transpose(), p2))
 
         # Set negative values to zeroes
-        dist[dist < 0] = 0
+        dist = 0 if dist < 0 else dist
         dist = np.sqrt(dist)
 
         return dist
