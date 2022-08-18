@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import pandas as pd
 import pytest
 import starfile
 
@@ -226,4 +227,18 @@ def test_shift_positions(m, shift, ref):
     #     merged = motl.df.merge(ref_motl.df, how='outer', indicator=True)
     #     print('Rows only in the TEST dataframe:\n', merged.loc[merged['_merge'] == 'left_only', 'shift_x':'shift_z'])
     #     print('Rows only in the REF dataframe\n: ', merged.loc[merged['_merge'] == 'right_only', 'shift_x':'shift_z'], '\n')
+
+
+def test_spline_sampling():
+    coords = pd.read_csv('./example_files/test/spline/coords.txt', sep='\t', header=None)
+    ref = pd.read_csv('./example_files/test/spline/carbon_edge.txt', sep='\t', header=None)
+    carbon_edge = Motl.spline_sampling(coords, 2)
+    assert carbon_edge.equals(ref)
+
+
+@pytest.mark.parametrize('m, model_path, model_suffix, distance_threshold, dimensions', [
+    ('./example_files/test/clean_on_carbon/allmotl_sp_cl1_1.em', './example_files/test/clean_on_carbon/', '_lt_motl_model', 1, './example_files/test/clean_on_carbon/dimensions.txt')])
+def test_clean_particles_on_carbon(m, model_path, model_suffix, distance_threshold, dimensions):
+    motl = Motl.load(m)
+    motl.clean_particles_on_carbon(model_path, model_suffix, distance_threshold, dimensions)
 

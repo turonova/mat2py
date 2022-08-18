@@ -11,7 +11,8 @@ from exceptions import UserInputError
 from math import ceil
 from matplotlib import pyplot as plt
 from numpy.matlib import repmat
-from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import UnivariateSpline, InterpolatedUnivariateSpline
+from scipy.spatial import KDTree
 from scipy.spatial.transform import Rotation as rot
 
 
@@ -547,33 +548,29 @@ class Motl:
         #         sampling_distance: sampling frequency in pixels
         # Output: coordinates of points on the spline
 
-        # F=spline(1:size(coord,2),coord)
-        spline = UnivariateSpline(np.arrange(0, len(coords)), coords)  # TODO ensure right interpolation
+        # spline = UnivariateSpline(np.arange(0, len(coords), 1), coords.to_numpy())
+        spline = InterpolatedUnivariateSpline(np.arange(0, len(coords), 1), coords.to_numpy())
 
         # Keep track of steps across whole tube
         totalsteps = 0
 
-        for n in range(len(coords)):
-            if n == 0: continue
+        for i, row in coords.iterrows():
+            if i == 0: continue
             # Calculate projected distance between each point
-            xc = coords[n, 'x'] - coords[n-1, 'x']
-            yc = coords[n, 'y'] - coords[n-1, 'y']
-            zc = coords[n, 'z'] - coords[n-1, 'z']
-
-            # Calculate Euclidian distance between points
-            dist = np.sqrt((xc ** 2) + (yc ** 2) + (zc ** 2))
+            dist = Motl.point2point_distance(row, coords.iloc[i-1])
 
             # Number of steps between two points; steps are roughly in increments of 1 pixel
             stepnumber = round(dist / sampling_distance)
             # Length of each step
             step = 1 / stepnumber
             # Array to hold fraction of each step between points
-            t = np.arrange(n-1, n, step)  # inclusive end in matlab
+            t = np.arrange(i-1, i, step)  # inclusive end in matlab
 
             # Evaluate piecewise-polynomial, i.e. spline, at steps 't'.
             # This array contains the Cartesian coordinates of each step
 
-            # Ft(:,totalsteps+1:totalsteps+size(t,2))=ppval(F, t) TODO
+            # Ft(:,totalsteps+1:totalsteps+size(t,2))=ppval(F, t) # TODO
+            # scipy.interpolate.NdPPoly
             spline_t = spline(t)
 
             # Increment the step counter
@@ -584,20 +581,19 @@ class Motl:
     def clean_particles_on_carbon(self, model_path, model_suffix, distance_threshold, dimensions):
         tomos_dim = self.load_dimensions(dimensions)
         tomos = self.df.loc[:, 'tomo_id'].unique()
+        # tomos = [142]
         cleaned_motl = self.__class__.create_empty_motl()
 
         for t in tomos:
             tomo_str = self.pad_with_zeros(t, 3)
             tm = self.df.loc[self.df['tomo_id'] == t].reset_index(drop=True)
 
-            tdim = tomos_dim.loc[tomos_dim[0] == t, 1:3]
-            # pos=tm(8:10,:)+tm(11:13,:);  TODO check that is what it should do
+            tdim = tomos_dim.loc[tomos_dim['tomo_id'] == t, 'x':'z']
             pos = pd.concat([(tm.loc[:, 'x'] + tm.loc[:, 'shift_x']),
                              (tm.loc[:, 'y'] + tm.loc[:, 'shift_y']),
                              (tm.loc[:, 'z'] + tm.loc[:, 'shift_z'])], axis=1)
 
-            # TODO what is model_suffix supposed to be?
-            mod_file_name = os.path.join(model_path, tomo_str, model_suffix)
+            mod_file_name = os.path.join(model_path, f'{tomo_str}{model_suffix}')
             if os.path.isfile(f'{mod_file_name}.mod'):
                 raise UserInputError(f'File to be generated ({mod_file_name}.mod) already exists in the destination. '
                                      f'Aborting the process to avoid overriding the existing file.')
@@ -605,25 +601,28 @@ class Motl:
                 cleaned_motl = pd.concat([cleaned_motl, tm])
 
             subprocess.run(['model2point', '-object', f'{mod_file_name}.mod', f'{mod_file_name}.txt'])
-            coord = pd.read_csv(f'{mod_file_name}.txt', sep='\t')
-            carbon_edge = self.spline_sampling(coord.iloc[:, 2:4], 2)
+            coord = pd.read_csv(f'{mod_file_name}.txt', sep='\t', header=None)
+            carbon_edge = self.spline_sampling(coord.iloc[:, 2:5], 2)
+            # TODO what is the first column?
+            # carbon_edge = pd.read_csv('./example_files/test/spline/carbon_edge.txt', header=None)
 
-            # TODO adjust based on carbon_edge
             all_points = []
-            for z in tdim[:2:2]:
+            for z in np.arrange(0, tdim[2], 2):
                 z_points = carbon_edge
-                z_points[:, 2] = z
+                z_points[:, 3] = z
                 all_points.append(z_points)
 
             rm_idx = []
-            for p in len(pos):
-                _, npd = dsearchn(all_points, pos.iloc[p, :])
+            for p, row in pos.iterrows():
+                kdt = KDTree(all_points)
+                npd = kdt.query(row)
                 if npd < distance_threshold:
-                    rm_idx.append(p)  # TODO is this reliable? do the idx from pos correspond to idx in tm?
+                    # TODO is this reliable? do the idx from pos correspond to idx in tm?
+                    rm_idx.append(p)
             tm.drop(rm_idx, inplace=True)
             cleaned_motl = pd.concat([cleaned_motl, tm])
 
-        self.df = cleaned_motl
+        self.df = cleaned_motl.reset_index(drop=True)
         return self
 
     @classmethod
