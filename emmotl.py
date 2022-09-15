@@ -244,7 +244,7 @@ class Motl:
         merged_motl.renumber_particles()
         return merged_motl
 
-    @classmethod  # TODO too slow, do the comparison more efficiently
+    @classmethod
     def get_particle_intersection(cls, motl1, motl2):
         m1, m2 = cls.load([motl1, motl2])
         m2_values = m2.df.loc[:, 'subtomo_id'].unique()
@@ -255,57 +255,6 @@ class Motl:
             intersected = pd.concat([intersected, submotl])
 
         return cls(intersected.reset_index(drop=True))
-
-    @classmethod  # TODO add tests, maybe write in more pythonic way
-    def class_consistency(cls, *args):
-        # TODO check the whole functionality against the matlab version (+ contents of the resulting objects)
-        if len(args) < 2:
-            raise UserInputError('At least 2 motls are needed for this analysis')
-
-        no_cls, all_classes = 1, []
-        loaded = cls.load(list(args))
-        min_particles = len(loaded[0].df)
-
-        # get number of classes
-        for motl in loaded:
-            min_particles = min(min_particles, len(motl.df))
-            clss = motl.df.loc[:, 'class'].unique()
-            no_cls = max(len(clss), no_cls)
-            if no_cls == len(clss): all_classes = clss
-
-        cls_overlap = np.zeros((len(loaded) - 1, no_cls))
-        # mid_overlap = np.zeros(min_particles, all_classes)
-        # mid_overlap = np.zeros(min_particles, all_classes)
-
-        motl_intersect = cls.create_empty_motl()
-        motl_bad = cls.create_empty_motl()
-
-        for i, cl in enumerate(all_classes):
-            i_motl = loaded[0]
-            i_motl_df = i_motl.df.loc[i_motl.df['class'] == cl]
-
-            for j, motl in enumerate(loaded):
-                if j == 0: continue
-                j_motl_df = motl.df.loc[motl.df['class'] == cl]
-
-                cl_o = len([el for el in i_motl_df.loc[:, 'subtomo_id'] if el in j_motl_df.loc[:, 'subtomo_id']])
-                cls_overlap[j-1, i] = cl_o
-
-                motl_bad = pd.concat(
-                    [motl_bad, i_motl_df.loc[i_motl_df.subtomo_id.isin(j_motl_df.loc[:, 'subtomo_id'].values)]])
-                motl_bad = pd.concat(
-                    [motl_bad, j_motl_df.loc[j_motl_df.subtomo_id.isin(i_motl_df.loc[:, 'subtomo_id'].values)]])
-
-                if cl_o != 0:
-                    print(f'The overlap of motl #{j} and #{j+1} is {cl_o} ({cl_o / len(i_motl_df) * 100}% of motl '
-                          f'#{j} and {cl_o / len(j_motl_df) * 100}% of motl #{j+1}.')
-                    i_motl_df = i_motl_df.loc[i_motl_df.subtomo_id.isin(j_motl_df.loc[:, 'subtomo_id'].values)]
-                else:
-                    print(f'Warning: motl # {str(j+1)} does not contain class #{str(cl)}')
-
-            motl_intersect = pd.concat([motl_intersect, i_motl_df])
-
-        return [motl_intersect, motl_bad, cls_overlap]
 
     def write_to_emfile(self, outfile_path):
         # TODO currently replaces all missing values in the whole df, maybe should be more specific to some columns
@@ -522,25 +471,6 @@ class Motl:
     ############################
     # PARTIALLY FINISHED METHODS
 
-    def shift_positions(self, shift):
-        # Shifts positions of all subtomgorams in the motl in the direction given by subtomos' rotations
-        # Input: shift - 3D vector - e.g. [1, 1, 1]. A vector in 3D is then rotated around the origin = [0 0 0].
-        #               Note that the coordinates are with respect to the origin!
-
-        def shift_coords(row):
-            v = np.array(shift)
-            euler_angles = np.array([[row['phi'], row['psi'], row['theta']]])
-            orientations = rot.from_euler(seq='zxz', angles=euler_angles, degrees=True)
-            rshifts = orientations.apply(v)
-
-            row['shift_x'] = row['shift_x'] + rshifts[0][0]
-            row['shift_y'] = row['shift_y'] + rshifts[0][1]
-            row['shift_z'] = row['shift_z'] + rshifts[0][2]
-            return row
-
-        self.df = self.df.apply(shift_coords, axis=1).reset_index(drop=True)
-        return self
-
     @staticmethod
     def spline_sampling(coords, sampling_distance):
         # Samples a spline specified by coordinates with a given sampling distance
@@ -614,6 +544,7 @@ class Motl:
 
             rm_idx = []
             for p, row in pos.iterrows():
+                # TODO just a best guess what method to use, it will depend on the format of results from spline_sampling
                 kdt = KDTree(all_points)
                 npd = kdt.query(row)
                 if npd < distance_threshold:
@@ -624,6 +555,58 @@ class Motl:
 
         self.df = cleaned_motl.reset_index(drop=True)
         return self
+
+    @classmethod  # TODO add tests, maybe write in more pythonic way
+    def class_consistency(cls, *args):
+        # TODO check the whole functionality against the matlab version (+ contents of the resulting objects)
+        if len(args) < 2:
+            raise UserInputError('At least 2 motls are needed for this analysis')
+
+        no_cls, all_classes = 1, []
+        loaded = cls.load(list(args))
+        min_particles = len(loaded[0].df)
+
+        # get number of classes
+        for motl in loaded:
+            min_particles = min(min_particles, len(motl.df))
+            clss = motl.df.loc[:, 'class'].unique()
+            no_cls = max(len(clss), no_cls)
+            if no_cls == len(clss): all_classes = clss
+
+        cls_overlap = np.zeros((len(loaded) - 1, no_cls))
+        # mid_overlap = np.zeros(min_particles, all_classes)
+        # mid_overlap = np.zeros(min_particles, all_classes)
+
+        motl_intersect = cls.create_empty_motl()
+        motl_bad = cls.create_empty_motl()
+
+        for i, cl in enumerate(all_classes):
+            i_motl = loaded[0]
+            i_motl_df = i_motl.df.loc[i_motl.df['class'] == cl]
+
+            for j, motl in enumerate(loaded):
+                if j == 0: continue
+                j_motl_df = motl.df.loc[motl.df['class'] == cl]
+
+                cl_o = len([el for el in i_motl_df.loc[:, 'subtomo_id'] if el in j_motl_df.loc[:, 'subtomo_id']])
+                cls_overlap[j-1, i] = cl_o
+
+                motl_bad = pd.concat(
+                    [motl_bad, i_motl_df.loc[i_motl_df.subtomo_id.isin(j_motl_df.loc[:, 'subtomo_id'].values)]])
+                motl_bad = pd.concat(
+                    [motl_bad, j_motl_df.loc[j_motl_df.subtomo_id.isin(i_motl_df.loc[:, 'subtomo_id'].values)]])
+
+                if cl_o != 0:
+                    print(f'The overlap of motl #{j} and #{j+1} is {cl_o} ({cl_o / len(i_motl_df) * 100}% of motl '
+                          f'#{j} and {cl_o / len(j_motl_df) * 100}% of motl #{j+1}.')
+                    i_motl_df = i_motl_df.loc[i_motl_df.subtomo_id.isin(j_motl_df.loc[:, 'subtomo_id'].values)]
+                else:
+                    print(f'Warning: motl # {str(j+1)} does not contain class #{str(cl)}')
+
+            motl_intersect = pd.concat([motl_intersect, i_motl_df])
+
+        # TODO return dfs or motls ?
+        return [motl_intersect, motl_bad, cls_overlap]
 
     @classmethod
     def recenter_subparticle(cls, motl_list, mask_list, size_list, rotations=None):
@@ -702,6 +685,25 @@ class Motl:
         new_motl.renumber_particles()
 
         return new_motl
+
+    def shift_positions(self, shift):
+        # Shifts positions of all subtomgorams in the motl in the direction given by subtomos' rotations
+        # Input: shift - 3D vector - e.g. [1, 1, 1]. A vector in 3D is then rotated around the origin = [0 0 0].
+        #               Note that the coordinates are with respect to the origin!
+
+        def shift_coords(row):
+            v = np.array(shift)
+            euler_angles = np.array([[row['phi'], row['psi'], row['theta']]])
+            orientations = rot.from_euler(seq='zxz', angles=euler_angles, degrees=True)
+            rshifts = orientations.apply(v)
+
+            row['shift_x'] = row['shift_x'] + rshifts[0][0]
+            row['shift_y'] = row['shift_y'] + rshifts[0][1]
+            row['shift_z'] = row['shift_z'] + rshifts[0][2]
+            return row
+
+        self.df = self.df.apply(shift_coords, axis=1).reset_index(drop=True)
+        return self
 
     @classmethod
     def movement_convergence(cls, motl_base_name, iteration_range, f_std=None):

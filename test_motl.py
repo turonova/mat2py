@@ -158,14 +158,14 @@ def test_get_particle_intersection(m1, m2, ref):
 
 
 @pytest.mark.parametrize('m, feature, hist, ref',
-                         [('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'tomo_id', None, './example_files/test/otsu/cleaned_1.em')])
-                         # [('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'tomo_id', None, './example_files/test/otsu/cleaned_1.em'),
-                         #  ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'object_id', None, './example_files/test/otsu/cleaned_2.em'),
-                         #  ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'tomo_id', 30, './example_files/test/otsu/cleaned_3.em'),
-                         #  ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'object_id', 20, './example_files/test/otsu/cleaned_4.em'),
-                         #  ('./example_files/test/otsu/au_1.em', 'tomo_id', None, './example_files/test/otsu/cleaned_5.em')
-                         #  ])
+                         [('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'tomo_id', None, './example_files/test/otsu/cleaned_1.em'),
+                          ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'object_id', None, './example_files/test/otsu/cleaned_2.em'),
+                          ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'tomo_id', 30, './example_files/test/otsu/cleaned_3.em'),
+                          ('./example_files/test/otsu/allmotl_sp_cl1_1.em', 'object_id', 20, './example_files/test/otsu/cleaned_4.em'),
+                          ('./example_files/test/otsu/au_1.em', 'tomo_id', None, './example_files/test/otsu/cleaned_5.em')
+                          ])
 def test_clean_by_otsu(m, feature, hist, ref):
+    # Python calculates slightly different otsu threshold, resulting in some rows classified differently
     motl, ref_motl = Motl.load([m, ref])
     motl.clean_by_otsu(feature, hist)
 
@@ -263,4 +263,3 @@ def test_recenter_subparticle(motl_list, mask_list, size_list, rotations, ref, r
         assert os.path.isfile(centered_mask)
         assert np.array_equal(emfile.read(centered_mask)[1], emfile.read(ref_masks[i])[1])
     assert centered_motl.df.equals(ref_df)
-#
