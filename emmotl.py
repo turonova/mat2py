@@ -630,73 +630,75 @@ class Motl:
         # motl_list = ['SU_motl_gp210_bin4_1.em','SU_motl_gp210_bin4_1.em']
         # mask_list = ['temp_mask.em','temp2_mask.em']
         # size_list = [36 36]
-        # rotations = [[0 0 0], [-90 0 0]]
+        # rotations = [[], [-90 0 0]]
         # Output: Motl instance. To write the result to a file, you can run:
         #           Motl.recenter_subparticle(motl_list, mask_list, size_list).write_to_emfile(outfile_path)
+        # New masks are exported at the same location as original masks, marked as '_centered.em'
+
+        # Generete zero rotations in case they were not specified
+        if not rotations:  
+            rotations = np.zeros((len(mask_list), 3))
+
+        if not len(motl_list) == len(mask_list) == len(size_list) == len(rotations):
+            raise UserInputError('The number of elements per argument must be equal.')
+        else:
+            elements = len(motl_list)
 
         # Error tolerance - should be done differently and not hard-coded!!! TODO note from original code
         epsilon = 0.00001
 
-        # Generete zero rotations in case they were not specified
-        if not rotations:
-            rotations = np.zeros((len(mask_list), 3))
         new_motl_df = cls.create_empty_motl()
 
-        for el in range(len(mask_list)):
-            mask = cls.load(mask_list[el])
-            submotl = cls.load(motl_list[el])
-
-            # TODO should we really write out new mask files here?
-            # get path of the masks and output  TODO should be generalized in the emwrite method?
-            # output_path = fileparts(output_motl);
-            # if(isempty(output_path))
-            #     output_path='./';
-            # else
-            #     output_path=[ output_path '/' ];
-            mask_name = os.path.basename(mask_list[el])
+        for el in range(elements):
+            _, mask = emfile.read(mask_list[el])
+            mask = np.array(mask).transpose()
+            motl = cls.load(motl_list[el])
+            new_mask_path = mask_list[el].replace('.em', '_centered.em')
 
             # set sizes of new and old masks
-            mask_size = len(mask.df)
-            # new_size = repmat(size_list[i], 1, 3)
+            mask_size = np.array(mask.shape)
             new_size = np.repeat(size_list[el], 3)
             old_center = mask_size / 2
             new_center = new_size / 2
 
-            # find center of mask  FIXME maybe approach differently in python
-            c_idx = [x for x in mask.df if x > epsilon]  # TODO map on the dataframe using apply
-            # TODO not sure there is a python method for that
-            i, j, k = ind2sub([len(mask.df), len(mask.df.columns)], c_idx)
-            s = [min(i), min(j), min(k)]
-            e = [max(i), max(j), max(k)]
-            mask_center = (s + e) / 2  # TODO s+e here probably does not do the same asi in matlab
+            # find center of mask
+            i, j, k = np.asarray(mask > epsilon).nonzero()
+            s = np.array([min(i), min(j), min(k)])
+            e = np.array([max(i), max(j), max(k)])
+            mask_center = (s + e) / 2
+            mask_center += 1  # account for python 0 based indices
 
             # get shifts
-            shifts = mask_center - old_center;
-            shifts2 = round(mask_center - new_center)
+            shifts = mask_center - old_center
+            shifts2 = mask_center - new_center
+            shifts2 = [float(decimal.Decimal(x).to_integral_value(rounding=decimal.ROUND_HALF_UP)) for x in shifts2]
 
-            # write out transformed mask to check it's as expeceted  # TODO should be preserved?
-            new_mask = tom_red(mask, shifts2, new_size)
-            if rotations[:, el] != 0:
-                new_mask = tom_rotate(new_mask, rotations[:, el])
-            new_mask.write_to_emfile(f'{output_path}/{mask_name}_centered_mask.em')
+            # write out transformed mask to check it's as expeceted
+            new_mask = tom_red(mask, shifts2, new_size)  # TODO
+            if not all(rotations[el] == 0):
+                new_mask = tom_rotate(new_mask, rotations[:, el])  # TODO
+            emfile.write(new_mask_path, new_mask, {}, overwrite=True)
 
             # change shifts in the motl accordingly
-            # TODO can we use these methods in place of the orignal code, or are there differences?
-            submotl.shift_positions(shifts, recenter_particles=True)
+            motl.shift_positions(shifts).update_coordinates()
+
             # create quatertions for rotation
-            if rotations[:, el] != 0:
-                q1 = euler2quat(submotl['phi'], submotl['psi'], submotl['theta'])
-                q2 = euler2quat(rotations[:, el])
-                mult = quat_mult(q2,q1)
-                new_angles = quat2euler(mult)
-            # m(17:19,:)=new_angles';
+            if not all(rotations[el] == 0):
+                q1 = rot.from_euler(seq='zxz', angles=motl.df.loc[:, 'phi':'theta'], degrees=True).as_quat()
+                q2 = rot.from_euler(seq='zxz', angles=rotations[el], degrees=True).as_quat()
+                mult = q1.__mul__(q2)
+                new_angles = mult.as_euler()
 
-            # add identifier in case of merge motls
-            submotl.df['geom_6'] = el
+                motl.df.loc[:, 'phi'] = new_angles[0]
+                motl.df.loc[:, 'psi'] = new_angles[1]
+                motl.df.loc[:, 'theta'] = new_angles[2]
 
-            new_motl_df = pd.concat([new_motl_df, submotl])
+            # add identifier in case of motls' merge
+            motl.df['geom_6'] = el
 
-        new_motl = cls(new_motl_df)
+            new_motl_df = pd.concat([new_motl_df, motl.df])
+
+        new_motl = cls(new_motl_df.reset_index(drop=True))
         new_motl.renumber_particles()
 
         return new_motl

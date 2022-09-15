@@ -1,3 +1,4 @@
+import emfile
 import numpy as np
 import os
 import pandas as pd
@@ -242,3 +243,24 @@ def test_clean_particles_on_carbon(m, model_path, model_suffix, distance_thresho
     motl = Motl.load(m)
     motl.clean_particles_on_carbon(model_path, model_suffix, distance_threshold, dimensions)
 
+
+@pytest.mark.parametrize('motl_list, mask_list, size_list, rotations, ref, ref_masks', [
+    (['./example_files/test/recenter_subparticle/sp_motl_cl1_14.em', './example_files/test/recenter_subparticle/sp_motl_cl2_14.em'],
+     ['./example_files/test/recenter_subparticle/mask56_recenter1.em', './example_files/test/recenter_subparticle/mask56_recenter2.em'],
+     [48, 32], None, './example_files/test/recenter_subparticle/ref1.em',
+     ['./example_files/test/recenter_subparticle/mask56_recenter1_centered_ref1.em', './example_files/test/recenter_subparticle/mask56_recenter2_centered_ref1.em']),
+    (['./example_files/test/recenter_subparticle/sp_motl_cl1_14.em', './example_files/test/recenter_subparticle/sp_motl_cl2_14.em'],
+     ['./example_files/test/recenter_subparticle/mask56_recenter1.em', './example_files/test/recenter_subparticle/mask56_recenter2.em'],
+     [48, 32], [[0, 90, 45], [-90, 0, 0]], './example_files/test/recenter_subparticle/ref2.em',
+     ['./example_files/test/recenter_subparticle/mask56_recenter1_centered_ref2.em', './example_files/test/recenter_subparticle/mask56_recenter2_centered_ref2.em'])
+])
+def test_recenter_subparticle(motl_list, mask_list, size_list, rotations, ref, ref_masks):
+    ref_df = Motl.load(ref).df
+    centered_motl = Motl.recenter_subparticle(motl_list, mask_list, size_list, rotations)
+
+    for i, mask in enumerate(mask_list):
+        centered_mask = mask.replace('.em', '_centered.em')
+        assert os.path.isfile(centered_mask)
+        assert np.array_equal(emfile.read(centered_mask)[1], emfile.read(ref_masks[i])[1])
+    assert centered_motl.df.equals(ref_df)
+#
