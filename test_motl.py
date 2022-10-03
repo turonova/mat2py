@@ -138,9 +138,17 @@ def test_split_by_feature(motl, f):
         check_emmotl(motl)
 
 
-@pytest.mark.parametrize('m1, m2', [('./example_files/test/au_1.em', './example_files/test/au_2.em')])
-def test_class_consistency(m1, m2):  # TODO
-    intersect, bad, clo = Motl.class_consistency(m1, m2)
+@pytest.mark.parametrize('motls, ref_int_f, ref_bad_f, ref_clo_f', [
+    (['./example_files/test/class_consistency/allmotl_sp_all_scratch_dn1_31.em', './example_files/test/class_consistency/allmotl_sp_all_scratch_dn2_31.em'], './example_files/test/class_consistency/ref1_int.em', './example_files/test/class_consistency/ref1_bad.em', './example_files/test/class_consistency/ref1_clo.em'),
+    (['./example_files/test/class_consistency/allmotl_sp_all_scratch_dn1_31.em', './example_files/test/class_consistency/allmotl_sp_all_scratch_dn4_31.em'], './example_files/test/class_consistency/ref2_int.em', './example_files/test/class_consistency/ref2_bad.em', './example_files/test/class_consistency/ref2_clo.em'),
+    (['./example_files/test/class_consistency/allmotl_sp_all_scratch_dn1_31.em', './example_files/test/class_consistency/allmotl_sp_all_scratch_dn2_31.em', './example_files/test/class_consistency/allmotl_sp_all_scratch_dn3_31.em', './example_files/test/class_consistency/allmotl_sp_all_scratch_dn4_31.em'], './example_files/test/class_consistency/ref3_int.em', './example_files/test/class_consistency/ref3_bad.em', './example_files/test/class_consistency/ref3_clo.em')])
+def test_class_consistency(motls, ref_int_f, ref_bad_f, ref_clo_f):
+    ref_intersect, ref_bad = Motl.load([ref_int_f, ref_bad_f])
+    ref_clo = emfile.read(ref_clo_f)[1]
+    intersect, bad, clo = Motl.class_consistency(*motls)
+    assert intersect.df.equals(ref_intersect.df)
+    assert bad.df.equals(ref_bad.df)
+    assert np.array_equal(clo, ref_clo)
 
 
 @pytest.mark.parametrize('m1, m2, ref',
