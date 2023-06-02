@@ -256,64 +256,6 @@ class Motl:
 
         return cls(intersected.reset_index(drop=True))
 
-    @classmethod
-    def class_consistency(cls, *args):
-        # Input: list of motls
-        # Output: intersection (Motl instance), bad (Motl instance), clo (np array),
-
-        if len(args) < 2:
-            raise UserInputError('At least 2 motls are needed for this analysis')
-
-        no_cls, all_classes = 1, []
-        loaded = cls.load(list(args))
-        min_particles = len(loaded[0].df)
-
-        # get number of classes
-        for motl in loaded:
-            min_particles = min(min_particles, len(motl.df))
-            clss = np.sort(motl.df.loc[:, 'class'].unique())
-            no_cls = max(len(clss), no_cls)
-            if no_cls == len(clss): all_classes = clss
-
-        cls_overlap = np.zeros((no_cls, len(loaded) - 1))
-        # mid_overlap = np.zeros(min_particles, all_classes)
-        # mid_overlap = np.zeros(min_particles, all_classes)
-
-        motl_intersect = cls.create_empty_motl()
-        motl_bad = cls.create_empty_motl()
-
-        for i, cl in enumerate(all_classes):
-            i_motl = loaded[0]
-            i_motl_df = i_motl.df.loc[i_motl.df['class'] == cl]
-
-            for j, motl in enumerate(loaded):
-                if j == 0: continue
-                j_motl_df = motl.df.loc[motl.df['class'] == cl]
-
-                cl_o = len(pd.merge(i_motl_df, j_motl_df, how='inner', on='subtomo_id'))
-                cls_overlap[i, j-1] = cl_o
-
-                i_subtomos = i_motl_df.loc[:, 'subtomo_id'].unique()
-                j_subtomos = j_motl_df.loc[:, 'subtomo_id'].unique()
-
-                j_bad = j_motl_df.loc[~j_motl_df.subtomo_id.isin(i_subtomos)]
-                i_bad = i_motl_df.loc[~i_motl_df.subtomo_id.isin(j_subtomos)]
-                motl_bad = pd.concat([motl_bad, j_bad, i_bad]).reset_index(drop=True)
-
-                if cl_o != 0:
-                    print(f'The overlap for class {cl} of motl #{j} and #{j+1} is {cl_o} ({cl_o / len(i_motl_df) * 100}% of motl '
-                          f'#{j} and {cl_o / len(j_motl_df) * 100}% of motl #{j+1}.)')
-                    i_motl_df = i_motl_df.loc[i_motl_df.subtomo_id.isin(j_motl_df.loc[:, 'subtomo_id'].values)]
-                else:
-                    print(f'Warning: motl # {j+1} does not contain class #{cl}')
-
-            motl_intersect = pd.concat([motl_intersect, i_motl_df])
-
-        header = {}
-        return [cls(motl_intersect.reset_index(drop=True), header),
-                cls(motl_bad.reset_index(drop=True), header),
-                np.array([cls_overlap])]
-
     def write_to_emfile(self, outfile_path):
         # TODO currently replaces all missing values in the whole df, maybe should be more specific to some columns
         filled_df = self.df.fillna(0.0)
@@ -613,6 +555,58 @@ class Motl:
 
         self.df = cleaned_motl.reset_index(drop=True)
         return self
+
+    @classmethod  # TODO add tests, maybe write in more pythonic way
+    def class_consistency(cls, *args):
+        # TODO check the whole functionality against the matlab version (+ contents of the resulting objects)
+        if len(args) < 2:
+            raise UserInputError('At least 2 motls are needed for this analysis')
+
+        no_cls, all_classes = 1, []
+        loaded = cls.load(list(args))
+        min_particles = len(loaded[0].df)
+
+        # get number of classes
+        for motl in loaded:
+            min_particles = min(min_particles, len(motl.df))
+            clss = motl.df.loc[:, 'class'].unique()
+            no_cls = max(len(clss), no_cls)
+            if no_cls == len(clss): all_classes = clss
+
+        cls_overlap = np.zeros((len(loaded) - 1, no_cls))
+        # mid_overlap = np.zeros(min_particles, all_classes)
+        # mid_overlap = np.zeros(min_particles, all_classes)
+
+        motl_intersect = cls.create_empty_motl()
+        motl_bad = cls.create_empty_motl()
+
+        for i, cl in enumerate(all_classes):
+            i_motl = loaded[0]
+            i_motl_df = i_motl.df.loc[i_motl.df['class'] == cl]
+
+            for j, motl in enumerate(loaded):
+                if j == 0: continue
+                j_motl_df = motl.df.loc[motl.df['class'] == cl]
+
+                cl_o = len([el for el in i_motl_df.loc[:, 'subtomo_id'] if el in j_motl_df.loc[:, 'subtomo_id']])
+                cls_overlap[j-1, i] = cl_o
+
+                motl_bad = pd.concat(
+                    [motl_bad, i_motl_df.loc[i_motl_df.subtomo_id.isin(j_motl_df.loc[:, 'subtomo_id'].values)]])
+                motl_bad = pd.concat(
+                    [motl_bad, j_motl_df.loc[j_motl_df.subtomo_id.isin(i_motl_df.loc[:, 'subtomo_id'].values)]])
+
+                if cl_o != 0:
+                    print(f'The overlap of motl #{j} and #{j+1} is {cl_o} ({cl_o / len(i_motl_df) * 100}% of motl '
+                          f'#{j} and {cl_o / len(j_motl_df) * 100}% of motl #{j+1}.')
+                    i_motl_df = i_motl_df.loc[i_motl_df.subtomo_id.isin(j_motl_df.loc[:, 'subtomo_id'].values)]
+                else:
+                    print(f'Warning: motl # {str(j+1)} does not contain class #{str(cl)}')
+
+            motl_intersect = pd.concat([motl_intersect, i_motl_df])
+
+        # TODO return dfs or motls ?
+        return [motl_intersect, motl_bad, cls_overlap]
 
     @classmethod
     def recenter_subparticle(cls, motl_list, mask_list, size_list, rotations=None):
